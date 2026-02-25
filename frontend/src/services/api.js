@@ -34,13 +34,3 @@ export const getFullReport = (id) => request(`/api/assessments/${id}/full-report
 export const getProducts = (category) => request(`/api/products/${category ? `?category=${category}` : ''}`);
 export const getCategories = () => request('/api/products/categories');
 export const matchProducts = (traits) => request('/api/products/match', { method: 'POST', body: JSON.stringify(traits) });
-
-// AI Upload
-export async function analyzeDocument(file) {
-  const formData = new FormData();
-  formData.append('file', file);
-  const res = await fetch(`${BASE}/api/products/analyze-document`, { method: 'POST', body: formData });
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || 'Upload failed'); }
-  return res.json();
-}
-export const saveAnalyzedProduct = (data) => request('/api/products/save-analyzed', { method: 'POST', body: JSON.stringify(data) });

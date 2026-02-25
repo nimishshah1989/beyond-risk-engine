@@ -3,23 +3,27 @@ import Sidebar from './components/Sidebar'
 import Dashboard from './pages/Dashboard'
 import Questionnaire from './pages/Questionnaire'
 import Results from './pages/Results'
+import Strategy from './pages/Strategy'
 import Products from './pages/Products'
 import QuestionBank from './pages/QuestionBank'
-import Upload from './pages/Upload'
+import Methodology from './pages/Methodology'
 
 const PAGES = [
-  { id: 'dashboard', label: 'Dashboard', icon: '⚡' },
+  { id: 'dashboard', label: 'Central', icon: '⚡' },
   { id: 'assess', label: 'New Assessment', icon: '📋' },
   { id: 'results', label: 'Assessment Results', icon: '📊' },
+  { id: 'strategy', label: 'Recommended Strategy', icon: '🎯' },
   { id: 'products', label: 'Product Universe', icon: '🏦' },
-  { id: 'upload', label: 'AI Analyzer', icon: '🤖' },
   { id: 'questions', label: 'Question Bank', icon: '🧠' },
+  { id: 'methodology', label: 'Methodology', icon: '📖' },
 ];
 
 export default function App() {
   const [page, setPage] = useState('dashboard');
   const [assessmentId, setAssessmentId] = useState(null);
   const [investorTraits, setInvestorTraits] = useState(null);
+  const [investorName, setInvestorName] = useState('');
+  const [fullReport, setFullReport] = useState(null);
 
   const handleAssessmentComplete = (id, traits) => {
     setAssessmentId(id);
@@ -38,12 +42,13 @@ export default function App() {
           <p className="text-xs text-gray-400">Beyond · Adaptive Behavioral Risk Engine v2</p>
         </div>
         <div className="p-6">
-          {page === 'dashboard' && <Dashboard onNav={setPage} onViewResults={(id, t) => { setAssessmentId(id); setInvestorTraits(t); setPage('results'); }} />}
+          {page === 'dashboard' && <Dashboard onNav={setPage} onViewResults={(id, t, name, report) => { setAssessmentId(id); setInvestorTraits(t); setInvestorName(name || ''); setFullReport(report || null); setPage('results'); }} />}
           {page === 'assess' && <Questionnaire onComplete={handleAssessmentComplete} />}
-          {page === 'results' && <Results assessmentId={assessmentId} traits={investorTraits} onMatchProducts={() => setPage('products')} />}
-          {page === 'products' && <Products investorTraits={investorTraits} />}
-          {page === 'upload' && <Upload />}
+          {page === 'results' && <Results assessmentId={assessmentId} traits={investorTraits} onMatchProducts={() => setPage('strategy')} onViewStrategy={() => setPage('strategy')} />}
+          {page === 'strategy' && <Strategy investorTraits={investorTraits} investorName={investorName} onViewProducts={() => setPage('products')} />}
+          {page === 'products' && <Products />}
           {page === 'questions' && <QuestionBank />}
+          {page === 'methodology' && <Methodology />}
         </div>
       </main>
     </div>

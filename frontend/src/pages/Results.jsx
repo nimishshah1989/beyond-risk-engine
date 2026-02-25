@@ -3,7 +3,7 @@ import { Card, Badge, Btn, Bar, RadarChart, LoadingSpinner } from '../components
 import { getFullReport } from '../services/api'
 import { TRAITS } from '../data/traits'
 
-export default function Results({ assessmentId, traits: propTraits, onMatchProducts }) {
+export default function Results({ assessmentId, traits: propTraits, onViewStrategy }) {
   const [report, setReport] = useState(null);
   const [traits, setTraits] = useState(propTraits);
   const [loading, setLoading] = useState(false);
@@ -202,10 +202,10 @@ export default function Results({ assessmentId, traits: propTraits, onMatchProdu
       <Card className="bg-gradient-to-r from-blue-800 to-blue-600 text-white border-0">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-base font-extrabold">Ready to Match Products?</h3>
-            <p className="text-blue-200 text-xs mt-1">Find the best-fit instruments from 33+ products based on this behavioral profile</p>
+            <h3 className="text-base font-extrabold">Ready for Recommendations?</h3>
+            <p className="text-blue-200 text-xs mt-1">See AI-recommended asset allocation and top product picks based on this behavioral profile</p>
           </div>
-          <Btn onClick={onMatchProducts} className="!bg-white !text-blue-800 hover:!bg-blue-50">Match Products →</Btn>
+          <Btn onClick={onViewStrategy} className="!bg-white !text-blue-800 hover:!bg-blue-50">View Recommended Strategy →</Btn>
         </div>
       </Card>
     </div>

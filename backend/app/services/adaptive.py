@@ -80,7 +80,7 @@ def should_stop_assessment(
     num_responses: int,
     confidence_scores: Dict[str, int],
     max_questions: int = 25,
-    min_questions: int = 12,
+    min_questions: int = 15,
     confidence_threshold: float = 72,
 ) -> bool:
     """
