@@ -1,17 +1,9 @@
 FROM node:20-slim
-
 WORKDIR /app
-
-# Install dependencies
 COPY package.json package-lock.json* ./
 RUN npm install
-
-# Copy source and build
 COPY . .
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
-
-# Verify dist was created
-RUN ls -la dist/
-
-# Serve the built app
 CMD ["node", "server.js"]
