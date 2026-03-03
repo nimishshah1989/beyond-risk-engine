@@ -34,3 +34,8 @@ export const getFullReport = (id) => request(`/api/assessments/${id}/full-report
 export const getProducts = (category) => request(`/api/products/${category ? `?category=${category}` : ''}`);
 export const getCategories = () => request('/api/products/categories');
 export const matchProducts = (traits) => request('/api/products/match', { method: 'POST', body: JSON.stringify(traits) });
+
+// Financial Context
+export const getFinancialContext = (investorId) => request(`/api/context/${investorId}`);
+export const saveFinancialContext = (investorId, data) => request(`/api/context/${investorId}`, { method: 'POST', body: JSON.stringify(data) });
+export const getCapacityScore = (investorId) => request(`/api/context/${investorId}/capacity`);

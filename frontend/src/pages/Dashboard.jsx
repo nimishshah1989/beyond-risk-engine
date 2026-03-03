@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, KPICard, Badge, Btn, Bar } from '../components/UI'
 import { getInvestors, getFullReport } from '../services/api'
 
-export default function Dashboard({ onNav, onViewResults }) {
+export default function Dashboard({ onNav, onOpenContext, onViewResults }) {
   const [investors, setInvestors] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -71,7 +71,10 @@ export default function Dashboard({ onNav, onViewResults }) {
                         ? <Badge color="#059669">Assessed</Badge>
                         : <Badge color="#d97706">Pending</Badge>}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2.5 flex gap-1.5">
+                      <Btn small onClick={(e) => { e.stopPropagation(); onOpenContext(inv.id, inv.name); }}>
+                        Financial Profile
+                      </Btn>
                       <Btn small primary onClick={(e) => { e.stopPropagation(); handleViewResults(inv); }}>
                         {inv.latest_assessment_id ? 'View Profile' : 'Assess'}
                       </Btn>
