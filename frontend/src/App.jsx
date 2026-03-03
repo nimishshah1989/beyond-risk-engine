@@ -10,6 +10,7 @@ import Methodology from './pages/Methodology'
 import FinancialContext from './pages/FinancialContext'
 import GameAssessment from './pages/GameAssessment'
 import DocumentUpload from './pages/DocumentUpload'
+import BehavioralProfile from './pages/BehavioralProfile'
 
 const PAGES = [
   { id: 'dashboard', label: 'Central', icon: '⚡' },
@@ -17,6 +18,7 @@ const PAGES = [
   { id: 'games', label: 'Assess (Games)', icon: '🎮' },
   { id: 'assess', label: 'Assess (Questions)', icon: '📋' },
   { id: 'upload', label: 'Upload Documents', icon: '📄' },
+  { id: 'profile', label: 'Behavioral Profile', icon: '🧬' },
   { id: 'results', label: 'Assessment Results', icon: '📊' },
   { id: 'strategy', label: 'Recommended Strategy', icon: '🎯' },
   { id: 'products', label: 'Product Universe', icon: '🏦' },
@@ -50,6 +52,12 @@ export default function App() {
     setPage('games');
   };
 
+  const handleOpenProfile = (id, name) => {
+    setInvestorId(id);
+    setInvestorName(name || '');
+    setPage('profile');
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar pages={PAGES} current={page} onNav={setPage} />
@@ -61,10 +69,11 @@ export default function App() {
           <p className="text-xs text-gray-400">Beyond · Adaptive Behavioral Risk Engine v3</p>
         </div>
         <div className="p-6">
-          {page === 'dashboard' && <Dashboard onNav={setPage} onOpenContext={handleOpenContext} onOpenGames={handleOpenGames} onViewResults={(id, t, name, report) => { setAssessmentId(id); setInvestorTraits(t); setInvestorName(name || ''); setFullReport(report || null); setPage('results'); }} />}
+          {page === 'dashboard' && <Dashboard onNav={setPage} onOpenContext={handleOpenContext} onOpenGames={handleOpenGames} onOpenProfile={handleOpenProfile} onViewResults={(id, t, name, report) => { setAssessmentId(id); setInvestorTraits(t); setInvestorName(name || ''); setFullReport(report || null); setPage('results'); }} />}
           {page === 'context' && <FinancialContext investorId={investorId} investorName={investorName} onComplete={() => setPage('games')} />}
           {page === 'games' && <GameAssessment investorId={investorId} investorName={investorName} onComplete={() => setPage('results')} />}
-          {page === 'upload' && <DocumentUpload investorId={investorId} investorName={investorName} onComplete={() => setPage('results')} />}
+          {page === 'upload' && <DocumentUpload investorId={investorId} investorName={investorName} onComplete={() => setPage('profile')} />}
+          {page === 'profile' && <BehavioralProfile investorId={investorId} investorName={investorName} />}
           {page === 'assess' && <Questionnaire onComplete={handleAssessmentComplete} />}
           {page === 'results' && <Results assessmentId={assessmentId} traits={investorTraits} onMatchProducts={() => setPage('strategy')} onViewStrategy={() => setPage('strategy')} />}
           {page === 'strategy' && <Strategy investorTraits={investorTraits} investorName={investorName} onViewProducts={() => setPage('products')} />}

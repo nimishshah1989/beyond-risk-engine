@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, KPICard, Badge, Btn, Bar } from '../components/UI'
 import { getInvestors, getFullReport } from '../services/api'
 
-export default function Dashboard({ onNav, onOpenContext, onOpenGames, onViewResults }) {
+export default function Dashboard({ onNav, onOpenContext, onOpenGames, onOpenProfile, onViewResults }) {
   const [investors, setInvestors] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -54,7 +54,7 @@ export default function Dashboard({ onNav, onOpenContext, onOpenGames, onViewRes
            ) : (
             <table className="w-full">
               <thead>
-                <tr>{['Name', 'Code', 'Age', 'AUM', 'Segment', 'Status', ''].map(h => (
+                <tr>{['Name', 'Code', 'AUM', 'Segment', 'Status', ''].map(h => (
                   <th key={h} className="text-left text-[10px] text-gray-400 font-bold uppercase tracking-wider px-3 py-2 border-b-2 border-gray-100">{h}</th>
                 ))}</tr>
               </thead>
@@ -63,23 +63,25 @@ export default function Dashboard({ onNav, onOpenContext, onOpenGames, onViewRes
                   <tr key={inv.id} className="hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => handleViewResults(inv)}>
                     <td className="px-3 py-2.5 text-xs font-bold">{inv.name}</td>
                     <td className="px-3 py-2.5 text-xs text-gray-500">{inv.code}</td>
-                    <td className="px-3 py-2.5 text-xs">{inv.age || '—'}</td>
                     <td className="px-3 py-2.5 text-xs font-bold">{inv.aum ? `₹${inv.aum}Cr` : '—'}</td>
                     <td className="px-3 py-2.5"><Badge>{inv.segment || 'Retail'}</Badge></td>
                     <td className="px-3 py-2.5">
-                      {inv.latest_assessment_id 
+                      {inv.latest_assessment_id
                         ? <Badge color="#059669">Assessed</Badge>
                         : <Badge color="#d97706">Pending</Badge>}
                     </td>
                     <td className="px-3 py-2.5 flex gap-1.5">
                       <Btn small onClick={(e) => { e.stopPropagation(); onOpenContext(inv.id, inv.name); }}>
-                        Financial Profile
+                        Context
                       </Btn>
                       <Btn small onClick={(e) => { e.stopPropagation(); onOpenGames(inv.id, inv.name); }}>
-                        Play Games
+                        Games
+                      </Btn>
+                      <Btn small onClick={(e) => { e.stopPropagation(); onOpenProfile(inv.id, inv.name); }}>
+                        Profile
                       </Btn>
                       <Btn small primary onClick={(e) => { e.stopPropagation(); handleViewResults(inv); }}>
-                        {inv.latest_assessment_id ? 'View Profile' : 'Assess'}
+                        {inv.latest_assessment_id ? 'Results' : 'Assess'}
                       </Btn>
                     </td>
                   </tr>

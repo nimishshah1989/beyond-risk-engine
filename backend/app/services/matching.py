@@ -7,12 +7,14 @@ Key principle: ASYMMETRIC SCORING
 - When investor has MORE than product demands → 0.7x penalty
   (over-prepared investor in simple product = suboptimal but safe)
 """
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 def match_investor_to_products(
     investor_traits: Dict[str, int],
     products: List[dict],
+    financial_capacity: Optional[float] = None,
+    ci_widths: Optional[Dict[str, float]] = None,
 ) -> List[dict]:
     """
     Compute behavioral fit scores for all products.
@@ -77,13 +79,31 @@ def match_investor_to_products(
             risk_vector.get("horizon_tolerance", 50)
         )))
 
+        # Match confidence from CI widths (narrower CI = higher confidence)
+        match_confidence = 100.0
+        if ci_widths:
+            relevant_widths = [ci_widths.get(t, 50) for t in risk_vector if t in ci_widths]
+            if relevant_widths:
+                avg_width = sum(relevant_widths) / len(relevant_widths)
+                match_confidence = round(max(0, 100 - avg_width), 1)
+
         # Determine recommendation
         if fit_score >= 75:
             recommendation = "RECOMMENDED"
         elif fit_score >= 55:
-            recommendation = "CONDITIONAL"
+            # Wide CI + product demands > investor = extra caution
+            if match_confidence < 50:
+                recommendation = "REVIEW_WITH_ADVISOR"
+            else:
+                recommendation = "CONDITIONAL"
         else:
             recommendation = "CAUTION"
+
+        # Financial capacity constraint
+        if financial_capacity is not None and financial_capacity < 40:
+            if risk_vector.get("loss_aversion", 0) > 60 or risk_vector.get("emotional_volatility", 0) > 60:
+                recommendation = "CAUTION"
+                fit_score = min(fit_score, 50)
 
         results.append({
             "product_id": product.get("id"),
@@ -103,6 +123,7 @@ def match_investor_to_products(
             "emotional_fit": emotional_fit,
             "horizon_fit": horizon_fit,
             "recommendation": recommendation,
+            "match_confidence": match_confidence,
             "trait_breakdown": trait_breakdown,
         })
 

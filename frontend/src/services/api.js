@@ -49,3 +49,12 @@ export const getGameSession = (sessionId) => request(`/api/games/session/${sessi
 // Documents
 export const getUploadStatus = (uploadId) => request(`/api/documents/status/${uploadId}`);
 export const getInvestorUploads = (investorId) => request(`/api/documents/investor/${investorId}`);
+
+// Profiles
+export const getProfile = (investorId) => request(`/api/profiles/${investorId}`);
+export const getProfileHistory = (investorId) => request(`/api/profiles/${investorId}/history`);
+export const recalculateProfile = (investorId) => request(`/api/profiles/${investorId}/recalculate`, { method: 'POST' });
+
+// Market
+export const getMarketRegime = () => request('/api/market/regime');
+export const checkAspiration = (data) => request('/api/market/aspiration-check', { method: 'POST', body: JSON.stringify(data) });

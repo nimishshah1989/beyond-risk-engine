@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime
 from app.models.database import (
     get_db, Investor, Assessment, InvestorResponse,
-    QuestionItem, AssessmentStatus
+    QuestionItem, AssessmentStatus, BehavioralProfile
 )
 from app.services.scoring import (
     compute_trait_scores, compute_behavioral_flags,
@@ -55,8 +55,21 @@ def _assessment_dict(a):
 
 @router.get("/investors")
 def list_investors(db: Session = Depends(get_db)):
-    return [{"id": i.id, "name": i.name, "code": i.code, "age": i.age,
-             "aum": i.aum, "segment": i.segment} for i in db.query(Investor).all()]
+    investors = db.query(Investor).all()
+    result = []
+    for i in investors:
+        latest = db.query(Assessment).filter(
+            Assessment.investor_id == i.id, Assessment.status == AssessmentStatus.COMPLETED
+        ).order_by(Assessment.completed_at.desc()).first()
+        bp = db.query(BehavioralProfile).filter_by(investor_id=i.id).first()
+        result.append({
+            "id": i.id, "name": i.name, "code": i.code, "age": i.age,
+            "aum": i.aum, "segment": i.segment,
+            "latest_assessment_id": latest.id if latest else None,
+            "profile_source": bp.data_sources if bp else None,
+            "composite_score": bp.composite_risk_score if bp else None,
+        })
+    return result
 
 @router.post("/investors")
 def create_investor(data: InvestorCreate, db: Session = Depends(get_db)):

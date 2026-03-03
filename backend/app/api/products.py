@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
-from app.models.database import get_db, Product
+from app.models.database import get_db, Product, BehavioralProfile, InvestorFinancialContext
 from app.services.matching import match_investor_to_products
 from app.services.instrument_analyzer import extract_text_from_pdf, analyze_instrument
 
@@ -52,15 +52,40 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/match")
-def match_products(investor_traits: dict, db: Session = Depends(get_db)):
-    """Match an investor's trait profile against all products."""
+def match_products(body: dict, db: Session = Depends(get_db)):
+    """Match investor traits against all products. Accepts raw traits or investor_id."""
+    # If investor_id provided, read from BehavioralProfile
+    investor_id = body.get("investor_id")
+    if investor_id:
+        profile = db.query(BehavioralProfile).filter_by(investor_id=investor_id).first()
+        if profile:
+            trait_ids = ["loss_aversion", "horizon_tolerance", "liquidity_sensitivity",
+                         "behavioral_stability", "ambiguity_tolerance", "regret_sensitivity",
+                         "leverage_comfort", "goal_rigidity", "emotional_volatility", "decision_confidence"]
+            investor_traits = {t: getattr(profile, t, 50) or 50 for t in trait_ids}
+            ci_widths = {}
+            for t in trait_ids:
+                lo = getattr(profile, f"{t}_ci_lower", None)
+                hi = getattr(profile, f"{t}_ci_upper", None)
+                if lo is not None and hi is not None:
+                    ci_widths[t] = hi - lo
+        else:
+            investor_traits = body
+            ci_widths = None
+        fin_ctx = db.query(InvestorFinancialContext).filter_by(investor_id=investor_id).first()
+        capacity = fin_ctx.financial_capacity_score if fin_ctx else None
+    else:
+        investor_traits = body
+        ci_widths = None
+        capacity = None
+
     products = db.query(Product).filter(Product.is_active == True).all()
     p_dicts = [{"id": p.id, "code": p.code, "name": p.name, "category": p.category,
                 "subcategory": p.subcategory, "description": p.description,
                 "risk_vector": p.risk_vector, "min_investment": p.min_investment,
                 "lock_in_years": p.lock_in_years, "expected_return_range": p.expected_return_range,
                 "risk_label": p.risk_label, "liquidity": p.liquidity} for p in products]
-    return match_investor_to_products(investor_traits, p_dicts)
+    return match_investor_to_products(investor_traits, p_dicts, capacity, ci_widths)
 
 
 @router.post("/analyze-document")

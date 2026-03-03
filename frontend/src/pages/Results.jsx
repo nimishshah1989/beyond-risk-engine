@@ -1,20 +1,25 @@
 import { useState, useEffect } from 'react'
 import { Card, Badge, Btn, Bar, RadarChart, LoadingSpinner } from '../components/UI'
-import { getFullReport } from '../services/api'
+import { getFullReport, getMarketRegime } from '../services/api'
 import { TRAITS } from '../data/traits'
 
 export default function Results({ assessmentId, traits: propTraits, onViewStrategy }) {
   const [report, setReport] = useState(null);
   const [traits, setTraits] = useState(propTraits);
+  const [regime, setRegime] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expandedTrait, setExpandedTrait] = useState(null);
 
   useEffect(() => {
     if (assessmentId) {
       setLoading(true);
-      getFullReport(assessmentId).then(r => {
+      Promise.all([
+        getFullReport(assessmentId),
+        getMarketRegime().catch(() => ({ data: null })),
+      ]).then(([r, mr]) => {
         setReport(r);
         setTraits(r.assessment?.trait_scores || propTraits);
+        setRegime(mr.data);
         setLoading(false);
       }).catch(() => setLoading(false));
     }
@@ -165,6 +170,31 @@ export default function Results({ assessmentId, traits: propTraits, onViewStrate
           ) : <p className="text-xs text-gray-400">No stress prediction available</p>}
         </Card>
       </div>
+
+      {/* Market Cycle Context */}
+      {regime && (
+        <Card className="mb-5">
+          <h3 className="text-sm font-bold mb-3">📈 Market Cycle Context</h3>
+          <div className="flex items-center gap-3 mb-3">
+            <Badge color={regime.regime?.includes('CRISIS') ? '#dc2626' : regime.regime?.includes('EUPHORIA') ? '#d97706' : regime.regime?.includes('ELEVATED') ? '#ea580c' : regime.regime?.includes('ATTRACTIVE') ? '#059669' : '#2563eb'}>
+              {(regime.regime || 'UNKNOWN').replace(/_/g, ' ')}
+            </Badge>
+            <span className="text-xs text-gray-500">Forward estimate: <span className="font-mono font-bold">{regime.expected_forward_return || '---'}</span></span>
+            <span className="text-xs text-gray-500">Risk premium: <span className="font-bold">{regime.risk_premium || '---'}</span></span>
+          </div>
+          <div className="grid grid-cols-4 gap-4 text-xs">
+            <div><span className="text-gray-400">NIFTY 50</span><span className="ml-2 font-mono font-bold">{regime.nifty_current || '---'}</span></div>
+            <div><span className="text-gray-400">Vol 30D</span><span className="ml-2 font-mono font-bold">{regime.vol_30d ? `${regime.vol_30d}%` : '---'}</span></div>
+            <div><span className="text-gray-400">Drawdown</span><span className="ml-2 font-mono font-bold">{regime.drawdown_from_peak ? `${regime.drawdown_from_peak}%` : '---'}</span></div>
+            <div><span className="text-gray-400">Valuation</span><span className="ml-2 font-mono font-bold">{regime.valuation_ratio || '---'}x</span></div>
+          </div>
+          <p className="text-[11px] text-gray-500 mt-3 italic">
+            {regime.risk_per_return === 'POOR' ? 'Current risk-reward is unfavorable — consider defensive positioning.' :
+             regime.risk_per_return === 'EXCELLENT' ? 'Risk premiums expanded — favorable environment for risk-tolerant investors.' :
+             'Market conditions are within normal range.'}
+          </p>
+        </Card>
+      )}
 
       {/* Conversation Guide */}
       {guide && (
