@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, KPICard, Badge, Btn, Bar } from '../components/UI'
 import { getInvestors, getFullReport } from '../services/api'
 
-export default function Dashboard({ onNav, onOpenContext, onViewResults }) {
+export default function Dashboard({ onNav, onOpenContext, onOpenGames, onViewResults }) {
   const [investors, setInvestors] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -75,6 +75,9 @@ export default function Dashboard({ onNav, onOpenContext, onViewResults }) {
                       <Btn small onClick={(e) => { e.stopPropagation(); onOpenContext(inv.id, inv.name); }}>
                         Financial Profile
                       </Btn>
+                      <Btn small onClick={(e) => { e.stopPropagation(); onOpenGames(inv.id, inv.name); }}>
+                        Play Games
+                      </Btn>
                       <Btn small primary onClick={(e) => { e.stopPropagation(); handleViewResults(inv); }}>
                         {inv.latest_assessment_id ? 'View Profile' : 'Assess'}
                       </Btn>
@@ -90,8 +93,12 @@ export default function Dashboard({ onNav, onOpenContext, onViewResults }) {
           <Card>
             <h3 className="text-sm font-bold mb-3">Quick Actions</h3>
             <div className="space-y-2">
+              <button onClick={() => onNav('games')} className="w-full text-left p-3 rounded-lg bg-teal-50 hover:bg-teal-100 transition-colors">
+                <div className="text-xs font-bold text-teal-800">🎮 Play Behavioral Games</div>
+                <div className="text-[10.5px] text-teal-600">4 games, 19 trials, ~2.5 minutes</div>
+              </button>
               <button onClick={() => onNav('assess')} className="w-full text-left p-3 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors">
-                <div className="text-xs font-bold text-blue-800">📋 Run New Assessment</div>
+                <div className="text-xs font-bold text-blue-800">📋 Run Question Assessment</div>
                 <div className="text-[10.5px] text-blue-600">Adaptive 15-25 question flow</div>
               </button>
               <button onClick={() => onNav('strategy')} className="w-full text-left p-3 rounded-lg bg-green-50 hover:bg-green-100 transition-colors">

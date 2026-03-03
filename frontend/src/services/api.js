@@ -39,3 +39,9 @@ export const matchProducts = (traits) => request('/api/products/match', { method
 export const getFinancialContext = (investorId) => request(`/api/context/${investorId}`);
 export const saveFinancialContext = (investorId, data) => request(`/api/context/${investorId}`, { method: 'POST', body: JSON.stringify(data) });
 export const getCapacityScore = (investorId) => request(`/api/context/${investorId}/capacity`);
+
+// Games
+export const startGameSession = (investorId) => request('/api/games/start', { method: 'POST', body: JSON.stringify({ investor_id: investorId }) });
+export const submitGameTrial = (data) => request('/api/games/trial', { method: 'POST', body: JSON.stringify(data) });
+export const completeGameSession = (sessionId) => request('/api/games/complete', { method: 'POST', body: JSON.stringify({ session_id: sessionId }) });
+export const getGameSession = (sessionId) => request(`/api/games/session/${sessionId}`);
