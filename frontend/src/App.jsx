@@ -9,12 +9,14 @@ import QuestionBank from './pages/QuestionBank'
 import Methodology from './pages/Methodology'
 import FinancialContext from './pages/FinancialContext'
 import GameAssessment from './pages/GameAssessment'
+import DocumentUpload from './pages/DocumentUpload'
 
 const PAGES = [
   { id: 'dashboard', label: 'Central', icon: '⚡' },
   { id: 'context', label: 'Financial Profile', icon: '💼' },
   { id: 'games', label: 'Assess (Games)', icon: '🎮' },
   { id: 'assess', label: 'Assess (Questions)', icon: '📋' },
+  { id: 'upload', label: 'Upload Documents', icon: '📄' },
   { id: 'results', label: 'Assessment Results', icon: '📊' },
   { id: 'strategy', label: 'Recommended Strategy', icon: '🎯' },
   { id: 'products', label: 'Product Universe', icon: '🏦' },
@@ -62,6 +64,7 @@ export default function App() {
           {page === 'dashboard' && <Dashboard onNav={setPage} onOpenContext={handleOpenContext} onOpenGames={handleOpenGames} onViewResults={(id, t, name, report) => { setAssessmentId(id); setInvestorTraits(t); setInvestorName(name || ''); setFullReport(report || null); setPage('results'); }} />}
           {page === 'context' && <FinancialContext investorId={investorId} investorName={investorName} onComplete={() => setPage('games')} />}
           {page === 'games' && <GameAssessment investorId={investorId} investorName={investorName} onComplete={() => setPage('results')} />}
+          {page === 'upload' && <DocumentUpload investorId={investorId} investorName={investorName} onComplete={() => setPage('results')} />}
           {page === 'assess' && <Questionnaire onComplete={handleAssessmentComplete} />}
           {page === 'results' && <Results assessmentId={assessmentId} traits={investorTraits} onMatchProducts={() => setPage('strategy')} onViewStrategy={() => setPage('strategy')} />}
           {page === 'strategy' && <Strategy investorTraits={investorTraits} investorName={investorName} onViewProducts={() => setPage('products')} />}

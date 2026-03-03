@@ -45,3 +45,7 @@ export const startGameSession = (investorId) => request('/api/games/start', { me
 export const submitGameTrial = (data) => request('/api/games/trial', { method: 'POST', body: JSON.stringify(data) });
 export const completeGameSession = (sessionId) => request('/api/games/complete', { method: 'POST', body: JSON.stringify({ session_id: sessionId }) });
 export const getGameSession = (sessionId) => request(`/api/games/session/${sessionId}`);
+
+// Documents
+export const getUploadStatus = (uploadId) => request(`/api/documents/status/${uploadId}`);
+export const getInvestorUploads = (investorId) => request(`/api/documents/investor/${investorId}`);

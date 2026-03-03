@@ -10,6 +10,7 @@ from app.api.investors import router as investors_router
 from app.api.products import router as products_router
 from app.api.context import router as context_router
 from app.api.games import router as games_router
+from app.api.documents import router as documents_router
 
 app = FastAPI(
     title="Beyond · Adaptive Behavioral Risk Engine",
@@ -33,6 +34,7 @@ app.include_router(investors_router)
 app.include_router(products_router)
 app.include_router(context_router)
 app.include_router(games_router)
+app.include_router(documents_router)
 
 
 @app.on_event("startup")
