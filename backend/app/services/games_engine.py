@@ -1,9 +1,12 @@
-"""Gamified Assessment Engine — 4 behavioral games, 19 trials total (~2.5 minutes).
+"""Gamified Assessment Engine — 4 behavioral games with contextual anchoring.
 
-Game 1: Risk Tolerance (Falk GPS Staircase) — 5 trials
-Game 2: Loss Aversion (Adaptive Bisection) — 6 trials
-Game 3: Time Preference (Koffarnus Adjusting Delay) — 5 trials
-Game 4: Herding Susceptibility (Social Proof Shift) — 3 scenarios × 2 phases
+Game 1: Risk Tolerance (Multiplier Bisection) — 5 trials
+Game 2: Loss Aversion (Lambda Ratio Bisection) — 5 trials
+Game 3: Time Preference (Adjusting Delay) — 5 trials
+Game 4: Herding Susceptibility (Knowledge-Aware Social Proof) — 3 scenarios x 2 phases
+
+Amounts scale to investor's financial reality via an anchor amount (~3% of investable assets).
+Bisection operates on multipliers/ratios, not absolute rupee amounts.
 """
 import logging
 import math
@@ -12,126 +15,182 @@ from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger("beyond_risk.games_engine")
 
-# ─── Game 1: Risk Tolerance (Falk GPS Staircase) ───
+# ─── Anchor Amount System ───
 
-RISK_GUARANTEED = 50000
-RISK_GAMBLE_RANGE = [60000, 300000]
+DEFAULT_ANCHOR = 200000  # 2L fallback when no financial context
+ANCHOR_FLOOR = 25000     # minimum 25K
+ANCHOR_CAP = 50000000    # maximum 5Cr
+
+
+def round_to_clean_amount(n: float) -> int:
+    """Round to psychologically clean numbers for Indian currency."""
+    n = int(n)
+    if n < 100000:       # < 1L: round to nearest 5K
+        return max(5000, round(n / 5000) * 5000)
+    elif n < 1000000:    # 1L-10L: round to nearest 25K
+        return round(n / 25000) * 25000
+    elif n < 10000000:   # 10L-1Cr: round to nearest 1L
+        return round(n / 100000) * 100000
+    else:                # > 1Cr: round to nearest 5L
+        return round(n / 500000) * 500000
+
+
+def compute_anchor_amount(financial_context) -> int:
+    """Compute a psychologically meaningful base amount from investor's financial context.
+
+    Target: ~3% of investable assets. Enough to feel meaningful
+    but not so large it triggers irrational panic.
+    """
+    if financial_context and financial_context.total_investable_assets:
+        raw = financial_context.total_investable_assets * 100000 * 0.03  # lakhs to INR, then 3%
+    elif financial_context and financial_context.annual_income:
+        raw = financial_context.annual_income * 100000 * 0.10  # 10% of annual income
+    else:
+        raw = DEFAULT_ANCHOR
+
+    clamped = max(ANCHOR_FLOOR, min(raw, ANCHOR_CAP))
+    return round_to_clean_amount(clamped)
+
+
+# ─── Game 1: Risk Tolerance (Multiplier Bisection) ───
+
+RISK_MULTIPLIER_RANGE = [1.2, 6.0]  # gamble = anchor x multiplier, 50% chance
 RISK_TRIALS = 5
 
 
-def risk_tolerance_first_stimulus() -> dict:
-    """Get the first stimulus for the risk tolerance game."""
-    mid = (RISK_GAMBLE_RANGE[0] + RISK_GAMBLE_RANGE[1]) / 2
+def risk_tolerance_first_stimulus(anchor: int) -> dict:
+    """First stimulus: guaranteed=anchor vs gamble at midpoint multiplier."""
+    mid_mult = (RISK_MULTIPLIER_RANGE[0] + RISK_MULTIPLIER_RANGE[1]) / 2
     return {
-        "guaranteed": RISK_GUARANTEED,
-        "gamble_win": round(mid),
+        "guaranteed": anchor,
+        "gamble_win": round_to_clean_amount(anchor * mid_mult),
         "gamble_prob": 0.5,
+        "multiplier": round(mid_mult, 2),
         "trial": 1,
     }
 
 
-def risk_tolerance_next(trial_num: int, choice: str, current_range: List[float]) -> Tuple[Optional[dict], List[float]]:
-    """Process response and return next stimulus (or None if done)."""
+def risk_tolerance_next(
+    trial_num: int, choice: str, current_range: List[float], anchor: int
+) -> Tuple[Optional[dict], List[float]]:
+    """Bisect the multiplier range based on choice."""
     mid = (current_range[0] + current_range[1]) / 2
     if choice == "gamble":
-        new_range = [mid, current_range[1]]  # more risk tolerant — increase gamble
+        new_range = [mid, current_range[1]]  # risk tolerant — needs less premium
     else:
-        new_range = [current_range[0], mid]  # less risk tolerant — decrease gamble
+        new_range = [current_range[0], mid]  # risk averse — reduce gamble
 
     if trial_num >= RISK_TRIALS:
         return None, new_range
 
     new_mid = (new_range[0] + new_range[1]) / 2
     return {
-        "guaranteed": RISK_GUARANTEED,
-        "gamble_win": round(new_mid),
+        "guaranteed": anchor,
+        "gamble_win": round_to_clean_amount(anchor * new_mid),
         "gamble_prob": 0.5,
+        "multiplier": round(new_mid, 2),
         "trial": trial_num + 1,
     }, new_range
 
 
 def risk_tolerance_score(final_range: List[float]) -> Tuple[float, float]:
-    """Convert final gamble range to 0-100 risk tolerance score.
+    """Convert final multiplier range to 0-100 risk tolerance score.
 
-    Lower gamble_win needed to take gamble = MORE risk tolerant.
+    Lower multiplier needed to gamble = MORE risk tolerant.
+    1.2x → ~95, 2.0x → ~60, 4.0x+ → ~15
     """
-    mid = (final_range[0] + final_range[1]) / 2
-    ce_ratio = RISK_GUARANTEED / mid  # certainty equivalent ratio
-    score = max(0, min(100, round((1 - ce_ratio) * 125 + 15)))
+    multiplier = (final_range[0] + final_range[1]) / 2
+    score = max(0, min(100, round(110 - 25 * multiplier)))
     sigma = 12.0
     return float(score), sigma
 
 
-# ─── Game 2: Loss Aversion (Adaptive Bisection) ───
+# ─── Game 2: Loss Aversion (Lambda Ratio Bisection) ───
 
-LOSS_GAIN = 20000
-LOSS_RANGE = [5000, 40000]
-LOSS_TRIALS = 6
+LOSS_LAMBDA_RANGE = [0.25, 4.0]  # loss = gain * ratio; bisect the ratio
+LOSS_TRIALS = 5
 
 
-def loss_aversion_first_stimulus() -> dict:
-    mid = round((LOSS_RANGE[0] + LOSS_RANGE[1]) / 2)
+def loss_aversion_first_stimulus(anchor: int) -> dict:
+    """First stimulus: gain = anchor/2, loss = gain * midpoint_ratio."""
+    gain = round_to_clean_amount(anchor * 0.5)
+    mid_ratio = (LOSS_LAMBDA_RANGE[0] + LOSS_LAMBDA_RANGE[1]) / 2
+    loss = round_to_clean_amount(gain * mid_ratio)
     return {
-        "gain": LOSS_GAIN,
-        "loss": mid,
+        "gain": gain,
+        "loss": loss,
         "probability": 0.5,
+        "lambda_ratio": round(mid_ratio, 3),
         "trial": 1,
     }
 
 
-def loss_aversion_next(trial_num: int, choice: str, current_range: List[float]) -> Tuple[Optional[dict], List[float]]:
+def loss_aversion_next(
+    trial_num: int, choice: str, current_range: List[float], anchor: int
+) -> Tuple[Optional[dict], List[float]]:
+    """Bisect the lambda ratio range based on accept/reject."""
     mid = (current_range[0] + current_range[1]) / 2
     if choice == "accept":
-        new_range = [mid, current_range[1]]  # tolerant, try higher loss
+        new_range = [mid, current_range[1]]  # tolerant of loss, try higher ratio
     else:
-        new_range = [current_range[0], mid]  # averse, try lower loss
+        new_range = [current_range[0], mid]  # averse, try lower ratio
 
     if trial_num >= LOSS_TRIALS:
         return None, new_range
 
-    new_mid = round((new_range[0] + new_range[1]) / 2)
+    gain = round_to_clean_amount(anchor * 0.5)
+    new_mid = (new_range[0] + new_range[1]) / 2
+    loss = round_to_clean_amount(gain * new_mid)
     return {
-        "gain": LOSS_GAIN,
-        "loss": new_mid,
+        "gain": gain,
+        "loss": loss,
         "probability": 0.5,
+        "lambda_ratio": round(new_mid, 3),
         "trial": trial_num + 1,
     }, new_range
 
 
 def loss_aversion_score(final_range: List[float]) -> Tuple[float, float, float]:
-    """Returns (lambda_raw, score_0_100, sigma)."""
-    switching_loss = (final_range[0] + final_range[1]) / 2
-    lambda_raw = LOSS_GAIN / switching_loss if switching_loss > 0 else 2.25
+    """Returns (lambda_raw, score_0_100, sigma).
 
-    # lambda ~1.0 = low loss aversion (~20), ~2.25 = average (~50), ~4.0+ = extreme (~95)
-    score = max(0, min(100, round((lambda_raw - 0.5) / 4.0 * 100)))
+    final_range contains the bisection ratio (loss/gain proportion).
+    KT lambda = 1/ratio (how much more painful losses are vs gains).
+    lambda ~0.5 → score ~10, lambda ~2.25 → ~50, lambda ~4.0 → ~95
+    """
+    ratio = (final_range[0] + final_range[1]) / 2
+    ratio = max(0.1, ratio)  # avoid div-by-zero
+    lambda_raw = 1.0 / ratio  # KT loss aversion coefficient
+
+    score = max(0, min(100, round(math.log(max(lambda_raw, 0.1)) / math.log(4.0) * 100)))
     sigma = 10.0
     return round(lambda_raw, 3), float(score), sigma
 
 
-# ─── Game 3: Time Preference (Koffarnus Adjusting Delay) ───
+# ─── Game 3: Time Preference (Adjusting Delay) ───
 
-TIME_IMMEDIATE = 50000
-TIME_DELAYED = 100000
 DELAY_SEQUENCE = [1, 7, 30, 180, 365, 1095, 3650, 9125]
 DELAY_LABELS = ["1 day", "1 week", "1 month", "6 months", "1 year", "3 years", "10 years", "25 years"]
 TIME_TRIALS = 5
 
 
-def time_preference_first_stimulus() -> dict:
+def time_preference_first_stimulus(anchor: int) -> dict:
+    """First stimulus: immediate=anchor, delayed=anchor*2, at midpoint delay."""
     idx = (0 + len(DELAY_SEQUENCE) - 1) // 2
     return {
-        "immediate": TIME_IMMEDIATE,
-        "delayed": TIME_DELAYED,
+        "immediate": anchor,
+        "delayed": round_to_clean_amount(anchor * 2),
         "delay_days": DELAY_SEQUENCE[idx],
         "delay_label": DELAY_LABELS[idx],
         "trial": 1,
     }
 
 
-def time_preference_next(trial_num: int, choice: str, current_range: List[int]) -> Tuple[Optional[dict], List[int]]:
+def time_preference_next(
+    trial_num: int, choice: str, current_range: List[int], anchor: int
+) -> Tuple[Optional[dict], List[int]]:
+    """Bisect the delay index. Accepts both 'now'/'immediate' as impatient."""
     idx = (current_range[0] + current_range[1]) // 2
-    if choice == "immediate":
+    if choice in ("immediate", "now"):
         new_range = [current_range[0], idx]  # impatient, try shorter delay
     else:
         new_range = [idx, current_range[1]]  # patient, try longer delay
@@ -142,8 +201,8 @@ def time_preference_next(trial_num: int, choice: str, current_range: List[int]) 
     new_idx = (new_range[0] + new_range[1]) // 2
     new_idx = max(0, min(len(DELAY_SEQUENCE) - 1, new_idx))
     return {
-        "immediate": TIME_IMMEDIATE,
-        "delayed": TIME_DELAYED,
+        "immediate": anchor,
+        "delayed": round_to_clean_amount(anchor * 2),
         "delay_days": DELAY_SEQUENCE[new_idx],
         "delay_label": DELAY_LABELS[new_idx],
         "trial": trial_num + 1,
@@ -163,9 +222,9 @@ def time_preference_score(final_range: List[int]) -> Tuple[float, float, float]:
     return round(k, 6), float(patience_score), sigma
 
 
-# ─── Game 4: Herding Susceptibility ───
+# ─── Game 4: Herding Susceptibility (Knowledge-Aware) ───
 
-HERDING_SCENARIOS = [
+HERDING_SCENARIOS_BASIC = [
     {
         "id": 1,
         "description": "Choose between two equity mutual funds for a 5-year investment",
@@ -176,7 +235,7 @@ HERDING_SCENARIOS = [
     },
     {
         "id": 2,
-        "description": "Markets have fallen 12% this month. What do you do with your equity SIPs?",
+        "description": "Markets have fallen 15% this month. What do you do with your equity SIPs?",
         "option_a": {"name": "Continue SIPs as planned"},
         "option_b": {"name": "Pause SIPs and wait for stability"},
         "social_signal": "73% of investors have paused their SIPs",
@@ -192,9 +251,44 @@ HERDING_SCENARIOS = [
     },
 ]
 
+HERDING_SCENARIOS_ADVANCED = [
+    {
+        "id": 1,
+        "description": "Choose a PMS strategy for your \u20b91 Cr+ allocation",
+        "option_a": {"name": "Momentum Alpha PMS", "return_3y": "22.4%", "drawdown": "-18%", "fee": "2.5% + 20% profit share"},
+        "option_b": {"name": "Smart Beta PMS", "return_3y": "16.8%", "drawdown": "-11%", "fee": "1.5% flat"},
+        "social_signal": "Momentum Alpha PMS topped the PMS rankings for 3 consecutive quarters",
+        "rational_choice": "B",
+    },
+    {
+        "id": 2,
+        "description": "Allocating 15% of portfolio internationally. Which approach?",
+        "option_a": {"name": "Emerging Markets Fund", "exposure": "China, Vietnam, Indonesia", "volatility": "High"},
+        "option_b": {"name": "Domestic Large Cap Index", "exposure": "NIFTY 50 top weights", "volatility": "Moderate"},
+        "social_signal": "FIIs have increased EM allocation by 40% this quarter",
+        "rational_choice": "B",
+    },
+    {
+        "id": 3,
+        "description": "Alternative investment for portfolio diversification",
+        "option_a": {"name": "Category II AIF", "lock_in": "3 years", "min_ticket": "\u20b91 Cr", "target_return": "18-22%"},
+        "option_b": {"name": "REIT (Embassy/Brookfield)", "lock_in": "None", "min_ticket": "\u20b915,000", "target_return": "8-12% + capital appreciation"},
+        "social_signal": "AIF inflows crossed \u20b92.5 lakh Cr this year, up 65% YoY",
+        "rational_choice": "B",
+    },
+]
 
-def herding_get_scenarios() -> dict:
-    """Return all 3 scenarios for the herding game (phase 1: without social signal)."""
+
+def _get_herding_scenarios(knowledge_level: Optional[str] = None) -> List[dict]:
+    """Select scenario pool based on investor knowledge level."""
+    if knowledge_level in ("advanced", "expert"):
+        return HERDING_SCENARIOS_ADVANCED
+    return HERDING_SCENARIOS_BASIC
+
+
+def herding_get_scenarios(knowledge_level: Optional[str] = None) -> dict:
+    """Return scenarios for phase 1 (without social signal)."""
+    scenarios = _get_herding_scenarios(knowledge_level)
     return {
         "phase": "without_signal",
         "scenarios": [
@@ -204,13 +298,14 @@ def herding_get_scenarios() -> dict:
                 "option_a": s["option_a"],
                 "option_b": s["option_b"],
             }
-            for s in HERDING_SCENARIOS
+            for s in scenarios
         ],
     }
 
 
-def herding_get_with_signal() -> dict:
+def herding_get_with_signal(knowledge_level: Optional[str] = None) -> dict:
     """Return scenarios WITH social signal (phase 2)."""
+    scenarios = _get_herding_scenarios(knowledge_level)
     return {
         "phase": "with_signal",
         "scenarios": [
@@ -221,25 +316,29 @@ def herding_get_with_signal() -> dict:
                 "option_b": s["option_b"],
                 "social_signal": s["social_signal"],
             }
-            for s in HERDING_SCENARIOS
+            for s in scenarios
         ],
     }
 
 
-def herding_score(phase1_choices: List[str], phase2_choices: List[str]) -> Tuple[float, float, float]:
+def herding_score(
+    phase1_choices: List[str], phase2_choices: List[str],
+    knowledge_level: Optional[str] = None,
+) -> Tuple[float, float, float]:
     """Compute herding index from before/after social signal choices.
 
     Returns (herding_index_0_1, herding_score_0_100, sigma).
     """
+    scenarios = _get_herding_scenarios(knowledge_level)
     shifts_toward_social = 0
-    for i in range(len(HERDING_SCENARIOS)):
+    for i in range(len(scenarios)):
         if i < len(phase1_choices) and i < len(phase2_choices):
             if phase1_choices[i] != phase2_choices[i]:
                 # Social signal always favors option A in our design
                 if phase2_choices[i] == "A":
                     shifts_toward_social += 1
 
-    herding_index = shifts_toward_social / len(HERDING_SCENARIOS)
+    herding_index = shifts_toward_social / len(scenarios)
     score = round(herding_index * 100)
     sigma = 20.0  # inherently uncertain with only 3 scenarios
     return round(herding_index, 3), float(score), sigma
@@ -270,7 +369,6 @@ def compute_session_quality(response_times: List[int]) -> Tuple[float, int]:
         return 50.0, 0
 
     median_rt = int(statistics.median(response_times))
-    valid_times = [rt for rt in response_times if rt >= 300]
     random_clicks = sum(1 for rt in response_times if rt < 300)
 
     # Quality factors
@@ -288,12 +386,13 @@ def compute_game_session_scores(
     herding_p1: List[str],
     herding_p2: List[str],
     response_times: List[int],
+    knowledge_level: Optional[str] = None,
 ) -> Dict:
     """Compute all scores for a completed game session."""
     rt_score, rt_sigma = risk_tolerance_score(risk_range)
     la_lambda, la_score, la_sigma = loss_aversion_score(loss_range)
     tp_k, tp_score, tp_sigma = time_preference_score(time_range)
-    h_index, h_score, h_sigma = herding_score(herding_p1, herding_p2)
+    h_index, h_score, h_sigma = herding_score(herding_p1, herding_p2, knowledge_level)
     quality, median_rt = compute_session_quality(response_times)
 
     # Widen sigmas if session quality is low

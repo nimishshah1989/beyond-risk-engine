@@ -6,7 +6,7 @@ import {
 
 const BASE = import.meta.env.VITE_API_URL || '';
 const GAME_ORDER = ['risk_tolerance', 'loss_aversion', 'time_preference', 'herding'];
-const TRIAL_COUNTS = { risk_tolerance: 5, loss_aversion: 6, time_preference: 5, herding: 6 };
+const TRIAL_COUNTS = { risk_tolerance: 5, loss_aversion: 5, time_preference: 5, herding: 6 };
 const GAME_META = [
   { key: 'risk_tolerance', label: 'Risk Tolerance', icon: '\uD83C\uDFB2', color: '#0d9488' },
   { key: 'loss_aversion', label: 'Loss Aversion', icon: '\uD83D\uDEE1\uFE0F', color: '#dc2626' },
@@ -68,6 +68,9 @@ export default function GameAssessment({ investorId, investorName, onComplete })
   const [loading, setLoading] = useState(false);
   const [locked, setLocked] = useState(false);
   const trialStart = useRef(0);
+  const firstTrials = useRef(null); // store first stimuli for all games
+  const herdingScenarios = useRef(null); // store herding scenarios
+  const herdingScenarioIdx = useRef(0); // current scenario within herding game
 
   const currentGame = GAME_ORDER[gameIndex];
   const totalTrials = TRIAL_COUNTS[currentGame] || 5;
@@ -77,7 +80,9 @@ export default function GameAssessment({ investorId, investorName, onComplete })
     try {
       const data = await api('/api/games/start', { investor_id: investorId });
       setSessionId(data.session_id);
-      setStimulus(data.first_trials?.[GAME_ORDER[0]] || {});
+      firstTrials.current = data.first_trials || {};
+      const firstStim = firstTrials.current[GAME_ORDER[0]] || {};
+      setStimulus(firstStim);
       setGameIndex(0); setTrialNum(1);
       trialStart.current = performance.now();
       setPhase('playing');
@@ -85,37 +90,103 @@ export default function GameAssessment({ investorId, investorName, onComplete })
     setLoading(false);
   }, [investorId]);
 
+  const startNextGame = useCallback((nextIdx) => {
+    const nextGame = GAME_ORDER[nextIdx];
+    setGameIndex(nextIdx);
+    setTrialNum(1);
+    herdingScenarioIdx.current = 0;
+
+    // Load first stimulus from cached first_trials
+    const first = firstTrials.current?.[nextGame];
+    if (nextGame === 'herding' && first) {
+      // Herding first stimulus has scenarios array — set up for scenario 0
+      herdingScenarios.current = first.scenarios || [];
+      setStimulus({
+        ...first,
+        scenario_index: 0,
+      });
+    } else {
+      setStimulus(first || {});
+    }
+
+    setPhase('transition');
+  }, []);
+
   const handleRespond = useCallback(async (response) => {
     if (locked) return;
     setLocked(true);
     const responseTimeMs = Math.round(performance.now() - trialStart.current);
+
+    // Build the stimulus to send — ensure it's always an object
+    const stimToSend = stimulus || {};
+
     try {
       const data = await api('/api/games/trial', {
         session_id: sessionId, game_type: currentGame, trial_number: trialNum,
-        stimulus, response: { ...response, response_time_ms: responseTimeMs },
+        stimulus: stimToSend, response: { ...response, response_time_ms: responseTimeMs },
         response_time_ms: responseTimeMs,
       });
-      // Brief visual feedback pause
+
       await new Promise((r) => setTimeout(r, 300));
+
       if (data.complete) {
+        // Current game finished — move to next game or finish
         const nextIdx = gameIndex + 1;
         if (nextIdx < GAME_ORDER.length) {
-          setGameIndex(nextIdx); setTrialNum(1);
-          setStimulus(data.next_stimulus || null);
-          setPhase('transition');
+          startNextGame(nextIdx);
         } else {
           setPhase('processing');
           const result = await api('/api/games/complete', { session_id: sessionId });
-          setScores(result); setPhase('results');
+          // Extract display scores from the result
+          const displayScores = {};
+          if (result.scores) {
+            displayScores.risk_tolerance = result.scores.risk_tolerance_score;
+            displayScores.loss_aversion = result.scores.loss_aversion_score;
+            displayScores.time_preference = result.scores.time_preference_score;
+            displayScores.herding = result.scores.herding_score;
+          }
+          setScores(displayScores);
+          setPhase('results');
+        }
+      } else if (currentGame === 'herding') {
+        // Herding game: handle phase transitions and scenario progression
+        if (data.next_phase === 'with_signal' && data.scenarios) {
+          // Transitioning to phase 2 — reload scenarios with social signals
+          herdingScenarios.current = data.scenarios.scenarios || data.scenarios || [];
+          herdingScenarioIdx.current = 0;
+          setStimulus({
+            phase: 'with_signal',
+            scenarios: herdingScenarios.current,
+            scenario_index: 0,
+          });
+          setTrialNum(n => n + 1);
+          trialStart.current = performance.now();
+        } else if (data.next_phase) {
+          // Next scenario within same phase
+          const nextScIdx = herdingScenarioIdx.current + 1;
+          herdingScenarioIdx.current = nextScIdx;
+          const currentPhase = data.next_phase;
+          setStimulus({
+            phase: currentPhase,
+            scenarios: herdingScenarios.current,
+            scenario_index: nextScIdx,
+          });
+          setTrialNum(n => n + 1);
+          trialStart.current = performance.now();
+        } else if (data.next_stimulus) {
+          setStimulus(data.next_stimulus);
+          setTrialNum(n => n + 1);
+          trialStart.current = performance.now();
         }
       } else {
+        // Standard game — use next_stimulus from response
         setStimulus(data.next_stimulus || {});
-        setTrialNum((n) => n + 1);
+        setTrialNum(n => n + 1);
         trialStart.current = performance.now();
       }
     } catch (err) { setError(err.message); }
     setLocked(false);
-  }, [locked, sessionId, currentGame, trialNum, stimulus, gameIndex]);
+  }, [locked, sessionId, currentGame, trialNum, stimulus, gameIndex, startNextGame]);
 
   const handleContinue = useCallback(() => {
     trialStart.current = performance.now();

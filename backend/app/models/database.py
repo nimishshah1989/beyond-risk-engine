@@ -161,6 +161,7 @@ class GameSession(Base):
     completed_at = Column(DateTime, nullable=True)
     device_type = Column(String(20))  # mobile, desktop, tablet
     median_response_time_ms = Column(Integer)
+    calibration_data = Column(JSON)  # {"anchor_amount": 300000, "knowledge_level": "advanced", "has_context": true}
 
     # Computed scores (populated on completion)
     risk_tolerance_score = Column(Float)
@@ -387,6 +388,23 @@ class InvestorFinancialContext(Base):
     time_horizon_years = Column(Integer)  # for this aspiration
     is_aspiration_realistic = Column(Boolean)  # computed by market cycle engine
     aspiration_gap_notes = Column(Text)
+
+    # Meaning of money (emotional driver)
+    money_meaning = Column(String(20))  # security, freedom, legacy, lifestyle, game
+    first_instinct = Column(String(20))  # save, invest, spend, give
+
+    # Fear & emotional landscape
+    worst_fear = Column(String(20))  # drawdown, illiquidity, inflation, fomo, trust, legacy
+    fear_impact = Column(String(20))  # panic, anxious, steady, detached
+    regret_preference = Column(String(20))  # loss_regret, miss_regret
+
+    # Knowledge & experience
+    knowledge_level = Column(String(20))  # basic, intermediate, advanced, expert
+    investment_experience = Column(JSON)  # list of experience types
+    wealth_concentration = Column(Float)  # % of total wealth this portfolio represents
+    equity_experience = Column(Boolean)  # has past equity experience
+    downturn_behavior = Column(String(30))  # sold_all, sold_some, held, bought_more, not_invested
+    recovery_behavior = Column(String(30))  # full_recovery, exited_early, never_returned
 
     # Decision making structure
     decision_maker = Column(String(30))  # SELF, JOINT_SPOUSE, FAMILY_ELDER, ADVISOR_DEPENDENT

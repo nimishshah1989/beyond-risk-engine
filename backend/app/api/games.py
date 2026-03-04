@@ -1,4 +1,4 @@
-"""Gamified Assessment API — 4 behavioral games, 19 trials."""
+"""Gamified Assessment API — 4 behavioral games with contextual anchoring."""
 import logging
 from datetime import datetime
 from typing import List, Optional
@@ -8,16 +8,25 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.models.database import (
-    get_db, Investor, GameSession, GameTrial, BehavioralProfile, ProfileHistory,
+    get_db, Investor, GameSession, GameTrial, BehavioralProfile,
+    ProfileHistory, InvestorFinancialContext,
 )
 from app.services.games_engine import (
-    risk_tolerance_first_stimulus, risk_tolerance_next,
-    loss_aversion_first_stimulus, loss_aversion_next,
-    time_preference_first_stimulus, time_preference_next,
-    herding_get_scenarios, herding_get_with_signal,
+    compute_anchor_amount,
+    risk_tolerance_first_stimulus, risk_tolerance_score,
+    loss_aversion_first_stimulus, loss_aversion_score,
+    time_preference_first_stimulus, time_preference_score,
+    herding_get_scenarios, herding_get_with_signal, herding_score,
     compute_game_session_scores, map_game_scores_to_traits,
-    RISK_GAMBLE_RANGE, LOSS_RANGE, DELAY_SEQUENCE,
+    RISK_MULTIPLIER_RANGE, LOSS_LAMBDA_RANGE,
+    DELAY_SEQUENCE, DELAY_LABELS,
+    round_to_clean_amount,
 )
+
+# Trial count constants
+RISK_TOLERANCE_TRIALS = 5
+LOSS_AVERSION_TRIALS = 5
+TIME_PREFERENCE_TRIALS = 5
 from app.services.bayesian_fusion import fuse_profiles, compute_composite_risk_score
 
 logger = logging.getLogger("beyond_risk.api.games")
@@ -36,7 +45,7 @@ class TrialRequest(BaseModel):
     game_type: str  # risk_tolerance, loss_aversion, time_preference, herding
     trial_number: int
     stimulus: dict
-    response: dict  # {"choice": "gamble"/"guaranteed"/"accept"/"reject"/"immediate"/"delayed"/"A"/"B"}
+    response: dict  # {"choice": "gamble"/"guaranteed"/"accept"/"reject"/"now"/"later"/"A"/"B"}
     response_time_ms: int
 
 
@@ -56,7 +65,7 @@ def _get_game_state(session_id: int, game_type: str, db: Session) -> tuple:
     )
 
     if game_type == "risk_tolerance":
-        current_range = list(RISK_GAMBLE_RANGE)
+        current_range = list(RISK_MULTIPLIER_RANGE)
         for t in trials:
             choice = t.response.get("choice", "")
             mid = (current_range[0] + current_range[1]) / 2
@@ -67,7 +76,7 @@ def _get_game_state(session_id: int, game_type: str, db: Session) -> tuple:
         return current_range, len(trials)
 
     elif game_type == "loss_aversion":
-        current_range = list(LOSS_RANGE)
+        current_range = list(LOSS_LAMBDA_RANGE)
         for t in trials:
             choice = t.response.get("choice", "")
             mid = (current_range[0] + current_range[1]) / 2
@@ -82,7 +91,7 @@ def _get_game_state(session_id: int, game_type: str, db: Session) -> tuple:
         for t in trials:
             choice = t.response.get("choice", "")
             idx = (current_range[0] + current_range[1]) // 2
-            if choice == "immediate":
+            if choice in ("immediate", "now"):
                 current_range = [current_range[0], idx]
             else:
                 current_range = [idx, current_range[1]]
@@ -103,34 +112,60 @@ def _get_game_state(session_id: int, game_type: str, db: Session) -> tuple:
     return None, 0
 
 
+def _load_session_anchor(session: GameSession) -> int:
+    """Extract anchor amount from session calibration data."""
+    cal = session.calibration_data or {}
+    return cal.get("anchor_amount", 200000)
+
+
+def _load_session_knowledge(session: GameSession) -> Optional[str]:
+    """Extract knowledge level from session calibration data."""
+    cal = session.calibration_data or {}
+    return cal.get("knowledge_level")
+
+
 # ─── Endpoints ───
 
 @router.post("/start")
 def start_game_session(req: StartGameRequest, db: Session = Depends(get_db)):
-    """Start a new game session for an investor. Returns first stimuli for all 4 games."""
+    """Start a new game session. Loads financial context to calibrate game amounts."""
     investor = db.query(Investor).filter_by(id=req.investor_id).first()
     if not investor:
         raise HTTPException(status_code=404, detail="Investor not found")
+
+    # Load financial context for anchor calibration
+    ctx = db.query(InvestorFinancialContext).filter_by(investor_id=req.investor_id).first()
+    anchor = compute_anchor_amount(ctx)
+    knowledge = ctx.knowledge_level if ctx else None
 
     session = GameSession(
         investor_id=req.investor_id,
         device_type=req.device_type,
         status="in_progress",
+        calibration_data={
+            "anchor_amount": anchor,
+            "knowledge_level": knowledge,
+            "has_context": ctx is not None,
+        },
     )
     db.add(session)
     db.commit()
     db.refresh(session)
 
-    logger.info("Game session %d started for investor %d", session.id, req.investor_id)
+    logger.info(
+        "Game session %d started for investor %d (anchor=%d, knowledge=%s)",
+        session.id, req.investor_id, anchor, knowledge,
+    )
 
     return {
         "session_id": session.id,
         "status": "in_progress",
+        "calibration": {"anchor_amount": anchor, "has_context": ctx is not None},
         "first_trials": {
-            "risk_tolerance": risk_tolerance_first_stimulus(),
-            "loss_aversion": loss_aversion_first_stimulus(),
-            "time_preference": time_preference_first_stimulus(),
-            "herding": herding_get_scenarios(),
+            "risk_tolerance": risk_tolerance_first_stimulus(anchor),
+            "loss_aversion": loss_aversion_first_stimulus(anchor),
+            "time_preference": time_preference_first_stimulus(anchor),
+            "herding": herding_get_scenarios(knowledge),
         },
     }
 
@@ -144,6 +179,9 @@ def submit_trial(req: TrialRequest, db: Session = Depends(get_db)):
     if session.status != "in_progress":
         raise HTTPException(status_code=400, detail="Session is not in progress")
 
+    anchor = _load_session_anchor(session)
+    knowledge = _load_session_knowledge(session)
+
     # Store the trial
     trial = GameTrial(
         session_id=req.session_id,
@@ -156,29 +194,59 @@ def submit_trial(req: TrialRequest, db: Session = Depends(get_db)):
     db.add(trial)
     db.commit()
 
-    choice = req.response.get("choice", "")
+    # _get_game_state includes the trial we just stored, so the
+    # returned range/counts reflect the state AFTER this response.
 
-    # Compute next stimulus based on game type
     if req.game_type == "risk_tolerance":
-        current_range, _ = _get_game_state(req.session_id, "risk_tolerance", db)
-        next_stim, new_range = risk_tolerance_next(req.trial_number, choice, current_range)
-        if next_stim:
-            return {"next_stimulus": next_stim, "game_type": "risk_tolerance"}
-        return {"complete": True, "game_type": "risk_tolerance"}
+        current_range, count = _get_game_state(req.session_id, "risk_tolerance", db)
+        if count >= RISK_TOLERANCE_TRIALS:
+            return {"complete": True, "game_type": "risk_tolerance"}
+        new_mid = (current_range[0] + current_range[1]) / 2
+        return {
+            "next_stimulus": {
+                "guaranteed": anchor,
+                "gamble_win": round_to_clean_amount(anchor * new_mid),
+                "gamble_prob": 0.5,
+                "multiplier": round(new_mid, 2),
+                "trial": count + 1,
+            },
+            "game_type": "risk_tolerance",
+        }
 
     elif req.game_type == "loss_aversion":
-        current_range, _ = _get_game_state(req.session_id, "loss_aversion", db)
-        next_stim, new_range = loss_aversion_next(req.trial_number, choice, current_range)
-        if next_stim:
-            return {"next_stimulus": next_stim, "game_type": "loss_aversion"}
-        return {"complete": True, "game_type": "loss_aversion"}
+        current_range, count = _get_game_state(req.session_id, "loss_aversion", db)
+        if count >= LOSS_AVERSION_TRIALS:
+            return {"complete": True, "game_type": "loss_aversion"}
+        gain = round_to_clean_amount(anchor * 0.5)
+        new_mid = (current_range[0] + current_range[1]) / 2
+        loss = round_to_clean_amount(gain * new_mid)
+        return {
+            "next_stimulus": {
+                "gain": gain,
+                "loss": loss,
+                "probability": 0.5,
+                "lambda_ratio": round(new_mid, 3),
+                "trial": count + 1,
+            },
+            "game_type": "loss_aversion",
+        }
 
     elif req.game_type == "time_preference":
-        current_range, _ = _get_game_state(req.session_id, "time_preference", db)
-        next_stim, new_range = time_preference_next(req.trial_number, choice, current_range)
-        if next_stim:
-            return {"next_stimulus": next_stim, "game_type": "time_preference"}
-        return {"complete": True, "game_type": "time_preference"}
+        current_range, count = _get_game_state(req.session_id, "time_preference", db)
+        if count >= TIME_PREFERENCE_TRIALS:
+            return {"complete": True, "game_type": "time_preference"}
+        new_idx = (current_range[0] + current_range[1]) // 2
+        new_idx = max(0, min(len(DELAY_SEQUENCE) - 1, new_idx))
+        return {
+            "next_stimulus": {
+                "immediate": anchor,
+                "delayed": round_to_clean_amount(anchor * 2),
+                "delay_days": DELAY_SEQUENCE[new_idx],
+                "delay_label": DELAY_LABELS[new_idx],
+                "trial": count + 1,
+            },
+            "game_type": "time_preference",
+        }
 
     elif req.game_type == "herding":
         (p1, p2), count = _get_game_state(req.session_id, "herding", db)
@@ -187,7 +255,12 @@ def submit_trial(req: TrialRequest, db: Session = Depends(get_db)):
             return {"next_phase": "without_signal", "remaining": 3 - len(p1), "game_type": "herding"}
         elif len(p2) < 3:
             if len(p2) == 0:
-                return {"next_phase": "with_signal", "scenarios": herding_get_with_signal(), "game_type": "herding"}
+                # Transition to phase 2 — send scenarios with social signals
+                return {
+                    "next_phase": "with_signal",
+                    "scenarios": herding_get_with_signal(knowledge),
+                    "game_type": "herding",
+                }
             return {"next_phase": "with_signal", "remaining": 3 - len(p2), "game_type": "herding"}
         return {"complete": True, "game_type": "herding"}
 
@@ -200,6 +273,8 @@ def complete_session(req: CompleteRequest, db: Session = Depends(get_db)):
     session = db.query(GameSession).filter_by(id=req.session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    knowledge = _load_session_knowledge(session)
 
     # Gather final state for each game
     risk_range, _ = _get_game_state(req.session_id, "risk_tolerance", db)
@@ -215,6 +290,7 @@ def complete_session(req: CompleteRequest, db: Session = Depends(get_db)):
     scores = compute_game_session_scores(
         risk_range, loss_range, time_range,
         herding_p1, herding_p2, response_times,
+        knowledge_level=knowledge,
     )
 
     # Update session
@@ -272,6 +348,7 @@ def get_session(session_id: int, db: Session = Depends(get_db)):
             "status": session.status,
             "started_at": session.started_at.isoformat() if session.started_at else None,
             "completed_at": session.completed_at.isoformat() if session.completed_at else None,
+            "calibration_data": session.calibration_data,
             "risk_tolerance_score": session.risk_tolerance_score,
             "risk_tolerance_sigma": session.risk_tolerance_sigma,
             "loss_aversion_lambda": session.loss_aversion_lambda,
