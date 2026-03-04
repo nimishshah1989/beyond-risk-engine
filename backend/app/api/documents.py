@@ -2,7 +2,7 @@
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
@@ -76,10 +76,18 @@ async def upload_document(
 
 @router.get("/status/{upload_id}")
 def get_upload_status(upload_id: int, db: Session = Depends(get_db)):
-    """Poll the status of an upload."""
+    """Poll the status of an upload. Auto-fails uploads stuck in parsing > 3 min."""
     upload = db.query(DocumentUpload).filter_by(id=upload_id).first()
     if not upload:
         raise HTTPException(status_code=404, detail="Upload not found")
+
+    # Auto-fail stale uploads stuck in "parsing" or "scoring" (server restart kills background tasks)
+    if upload.status in ("parsing", "scoring") and upload.uploaded_at:
+        age = datetime.utcnow() - upload.uploaded_at
+        if age > timedelta(minutes=3):
+            upload.status = "failed"
+            upload.error_message = "Processing timed out. The server may have restarted. Please re-upload."
+            db.commit()
 
     return {
         "upload_id": upload.id,

@@ -139,10 +139,10 @@ export default function InvestorJourney({ investorId, investorName, onComplete, 
           {step === 2 && (
             <div>
               <DocumentUpload investorId={investorId} investorName={investorName} onComplete={handleDocumentsComplete} embedded />
-              <div className="mt-4 text-center">
+              <div className="mt-4 flex items-center justify-center gap-4">
                 <button onClick={handleSkipDocuments}
-                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors underline underline-offset-2">
-                  Skip document upload &mdash; generate report without transaction data
+                  className="text-xs font-bold px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+                  Skip &rarr; Generate Report Without Documents
                 </button>
               </div>
             </div>
