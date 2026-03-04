@@ -54,6 +54,23 @@ class FinancialContextInput(BaseModel):
     primary_residence_value: Optional[float] = None
     existing_liabilities: Optional[float] = None
 
+    # Meaning of money
+    money_meaning: Optional[str] = Field(None, description="security, freedom, legacy, lifestyle, game")
+    first_instinct: Optional[str] = Field(None, description="save, invest, spend, give")
+
+    # Fear & emotional landscape
+    worst_fear: Optional[str] = Field(None, description="drawdown, illiquidity, inflation, fomo, trust, legacy")
+    fear_impact: Optional[str] = Field(None, description="panic, anxious, steady, detached")
+    regret_preference: Optional[str] = Field(None, description="loss_regret, miss_regret")
+
+    # Knowledge & experience
+    knowledge_level: Optional[str] = Field(None, description="basic, intermediate, advanced, expert")
+    investment_experience: Optional[list] = Field(None, description="List of experience types")
+    wealth_concentration: Optional[float] = Field(None, description="% of total wealth this portfolio represents")
+    equity_experience: Optional[bool] = None
+    downturn_behavior: Optional[str] = Field(None, description="sold_all, sold_some, held, bought_more, not_invested")
+    recovery_behavior: Optional[str] = Field(None, description="full_recovery, exited_early, never_returned")
+
     # Loss experience
     has_experienced_real_loss: Optional[bool] = None
     worst_loss_amount: Optional[float] = None
@@ -196,6 +213,20 @@ def _context_to_dict(ctx: InvestorFinancialContext) -> dict:
         "total_investable_assets": ctx.total_investable_assets,
         "existing_liabilities": ctx.existing_liabilities,
         "net_worth": ctx.net_worth,
+        # Meaning of money
+        "money_meaning": ctx.money_meaning,
+        "first_instinct": ctx.first_instinct,
+        # Fear & emotional landscape
+        "worst_fear": ctx.worst_fear,
+        "fear_impact": ctx.fear_impact,
+        "regret_preference": ctx.regret_preference,
+        # Knowledge & experience
+        "knowledge_level": ctx.knowledge_level,
+        "investment_experience": ctx.investment_experience,
+        "wealth_concentration": ctx.wealth_concentration,
+        "equity_experience": ctx.equity_experience,
+        "downturn_behavior": ctx.downturn_behavior,
+        "recovery_behavior": ctx.recovery_behavior,
         # Loss experience
         "has_experienced_real_loss": ctx.has_experienced_real_loss,
         "worst_loss_amount": ctx.worst_loss_amount,

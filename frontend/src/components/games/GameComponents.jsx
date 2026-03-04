@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const fmtINR = (n) => '\u20B9' + n.toLocaleString('en-IN');
+const fmtINR = (n) => '\u20B9' + Number(n).toLocaleString('en-IN');
 const GAME_LABELS = ['Risk Tolerance', 'Loss Aversion', 'Time Preference', 'Herding Bias'];
 const GAME_ICONS = ['\uD83C\uDFB2', '\uD83D\uDEE1\uFE0F', '\u23F3', '\uD83D\uDC65'];
 
@@ -69,7 +69,10 @@ function ChoiceButton({ label, title, description, color = 'teal', onClick, disa
 
 /* ── RiskToleranceGame ────────────────────────────────────────────── */
 export function RiskToleranceGame({ stimulus, onRespond, disabled }) {
-  const { guaranteed = 50000, gamble_amount = 120000, probability = 50 } = stimulus || {};
+  const s = stimulus || {};
+  const guaranteed = s.guaranteed ?? 50000;
+  const gambleWin = s.gamble_win ?? s.gamble_amount ?? 120000;
+  const probability = s.gamble_prob != null ? Math.round(s.gamble_prob * 100) : (s.probability ?? 50);
   return (
     <GameCard>
       <div className="text-center mb-6">
@@ -80,7 +83,7 @@ export function RiskToleranceGame({ stimulus, onRespond, disabled }) {
         <ChoiceButton label="Option A - Safe" title={fmtINR(guaranteed)}
           description="Guaranteed amount, zero risk" color="teal"
           onClick={() => onRespond({ choice: 'safe' })} disabled={disabled} />
-        <ChoiceButton label="Option B - Gamble" title={fmtINR(gamble_amount)}
+        <ChoiceButton label="Option B - Gamble" title={fmtINR(gambleWin)}
           description={`${probability}% chance of winning, ${100 - probability}% chance of nothing`}
           color="blue" onClick={() => onRespond({ choice: 'gamble' })} disabled={disabled} />
       </div>
@@ -122,15 +125,22 @@ export function LossAversionGame({ stimulus, onRespond, disabled }) {
 
 /* ── TimePreferenceGame ───────────────────────────────────────────── */
 export function TimePreferenceGame({ stimulus, onRespond, disabled }) {
-  const { immediate = 50000, delayed = 100000, delay_months = 12 } = stimulus || {};
-  const delayLabel = delay_months >= 12
-    ? `${delay_months / 12} year${delay_months > 12 ? 's' : ''}`
-    : `${delay_months} month${delay_months > 1 ? 's' : ''}`;
+  const s = stimulus || {};
+  const immediate = s.immediate ?? 50000;
+  const delayed = s.delayed ?? 100000;
+  const delayLabel = s.delay_label || (s.delay_years ? `${s.delay_years} year${s.delay_years > 1 ? 's' : ''}` : '1 year');
+  const premium = s.premium ? Math.round((s.premium - 1) * 100) : null;
+  const phase = s.phase || 'short';
   return (
     <GameCard>
       <div className="text-center mb-6">
         <p className="text-sm text-slate-500 mb-1">When would you like your money?</p>
-        <p className="text-base font-semibold text-slate-800">A smaller amount now, or a larger amount later?</p>
+        <p className="text-base font-semibold text-slate-800">Take {fmtINR(immediate)} today, or wait for more?</p>
+        {premium != null && (
+          <span className="inline-block mt-2 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">
+            +{premium}% premium &middot; {phase === 'long' ? 'Long horizon' : 'Short horizon'}
+          </span>
+        )}
       </div>
       <div className="flex gap-4">
         <ChoiceButton label="Now" title={fmtINR(immediate)}
@@ -146,24 +156,52 @@ export function TimePreferenceGame({ stimulus, onRespond, disabled }) {
 
 /* ── HerdingGame ──────────────────────────────────────────────────── */
 export function HerdingGame({ stimulus, onRespond, disabled }) {
-  const { option_a = 'Fund A', option_b = 'Fund B', social_signal = null, scenario = '' } = stimulus || {};
+  // stimulus can be a single scenario or contain a scenarios array
+  const s = stimulus || {};
+
+  // Extract the current scenario to display
+  let scenario = '';
+  let optionA = 'Fund A';
+  let optionB = 'Fund B';
+  let socialSignal = null;
+  let scenarioIndex = s.scenario_index ?? 0;
+  let phase = s.phase || 'without_signal';
+
+  if (s.scenarios && Array.isArray(s.scenarios) && s.scenarios.length > 0) {
+    const current = s.scenarios[scenarioIndex] || s.scenarios[0];
+    scenario = current.description || '';
+    optionA = typeof current.option_a === 'object' ? current.option_a.name : (current.option_a || 'Fund A');
+    optionB = typeof current.option_b === 'object' ? current.option_b.name : (current.option_b || 'Fund B');
+    socialSignal = current.social_signal || null;
+  } else {
+    scenario = s.scenario || s.description || '';
+    optionA = typeof s.option_a === 'object' ? s.option_a.name : (s.option_a || 'Fund A');
+    optionB = typeof s.option_b === 'object' ? s.option_b.name : (s.option_b || 'Fund B');
+    socialSignal = s.social_signal || null;
+  }
+
   return (
     <GameCard>
       <div className="text-center mb-5">
         <p className="text-sm text-slate-500 mb-2">Investment Scenario</p>
+        {phase === 'with_signal' && (
+          <div className="mb-2 inline-flex items-center gap-1 bg-purple-50 border border-purple-200 rounded-lg px-3 py-1">
+            <span className="text-[10px] text-purple-600 font-semibold">Phase 2 — Same scenarios, now with market data</span>
+          </div>
+        )}
         <p className="text-base font-semibold text-slate-800 leading-relaxed max-w-lg mx-auto">{scenario}</p>
-        {social_signal && (
+        {socialSignal && (
           <div className="mt-3 inline-flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
             <span className="text-base">{'\uD83D\uDCE2'}</span>
-            <span className="text-sm text-amber-800 font-medium">{social_signal}</span>
+            <span className="text-sm text-amber-800 font-medium">{socialSignal}</span>
           </div>
         )}
       </div>
       <div className="flex gap-4">
-        <ChoiceButton label="Option A" title={option_a} color="teal"
-          onClick={() => onRespond({ choice: 'A' })} disabled={disabled} />
-        <ChoiceButton label="Option B" title={option_b} color="blue"
-          onClick={() => onRespond({ choice: 'B' })} disabled={disabled} />
+        <ChoiceButton label="Option A" title={optionA} color="teal"
+          onClick={() => onRespond({ choice: 'A', phase, scenario_index: scenarioIndex })} disabled={disabled} />
+        <ChoiceButton label="Option B" title={optionB} color="blue"
+          onClick={() => onRespond({ choice: 'B', phase, scenario_index: scenarioIndex })} disabled={disabled} />
       </div>
     </GameCard>
   );

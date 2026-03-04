@@ -3,13 +3,15 @@ import { Card, Badge, Bar } from '../components/UI'
 
 const sections = [
   { id: 'overview', label: 'Overview', icon: '🎯' },
+  { id: 'journey', label: 'Assessment Journey', icon: '🧭' },
+  { id: 'meaning', label: 'Meaning of Money', icon: '💎' },
   { id: 'traits', label: '10-Trait Model', icon: '🧬' },
-  { id: 'questions', label: 'Question Design', icon: '📝' },
-  { id: 'adaptive', label: 'Adaptive Testing (CAT)', icon: '🤖' },
-  { id: 'scoring', label: 'Scoring & IRT', icon: '📐' },
+  { id: 'games', label: 'Behavioral Games', icon: '🎮' },
+  { id: 'composite', label: 'Composite Scoring', icon: '📐' },
+  { id: 'matrix', label: 'Liquidity x Drawdown Matrix', icon: '📊' },
+  { id: 'approaches', label: 'Investment Approaches', icon: '🏛️' },
   { id: 'flags', label: 'Behavioral Flags', icon: '⚠️' },
   { id: 'matching', label: 'Product Matching', icon: '🎯' },
-  { id: 'allocation', label: 'Strategy Engine', icon: '📊' },
   { id: 'references', label: 'Research & References', icon: '📚' },
 ];
 
@@ -24,7 +26,7 @@ export default function Methodology() {
           <div className="space-y-0.5">
             {sections.map(s => (
               <button key={s.id} onClick={() => setActive(s.id)}
-                className={`w-full text-left px-2.5 py-2 rounded-lg text-xs transition-all ${active === s.id ? 'bg-blue-800 text-white font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>
+                className={`w-full text-left px-2.5 py-2 rounded-lg text-xs transition-all ${active === s.id ? 'bg-teal-700 text-white font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>
                 <span className="mr-1.5">{s.icon}</span>{s.label}
               </button>
             ))}
@@ -37,29 +39,87 @@ export default function Methodology() {
         {active === 'overview' && (<Card>
           <h2 className="text-base font-extrabold text-gray-900 mb-3">Beyond Behavioral Risk Engine — How It Works</h2>
           <p className="text-sm text-gray-600 leading-relaxed mb-4">
-            Traditional risk profiling asks "How much risk can you take?" — a question most investors answer incorrectly because they confuse risk <em>capacity</em> (financial) with risk <em>tolerance</em> (behavioral). Our engine measures the behavioral dimension: how an investor actually behaves under uncertainty, loss, and complexity.
+            Traditional risk profiling asks "How much risk can you take?" — a question most investors answer incorrectly because they confuse risk <em>capacity</em> (financial) with risk <em>tolerance</em> (behavioral). Our engine goes deeper: understanding what money <em>means</em> to you, what you <em>fear</em>, how you've <em>actually behaved</em> under stress, and what your financial reality <em>allows</em>.
           </p>
-          <div className="bg-blue-50 p-4 rounded-xl mb-4">
-            <h4 className="text-xs font-bold text-blue-900 mb-2">The Core Insight</h4>
-            <p className="text-xs text-blue-700 leading-relaxed">
+          <div className="bg-teal-50 p-4 rounded-xl mb-4 border border-teal-200">
+            <h4 className="text-xs font-bold text-teal-900 mb-2">The Core Insight</h4>
+            <p className="text-xs text-teal-700 leading-relaxed">
               Investment returns are determined more by investor <strong>behavior</strong> than by product selection. A great fund in the hands of a panicky investor will underperform a mediocre fund held by a disciplined one. Our engine measures the behavioral traits that predict how an investor will <em>actually</em> behave — not how they <em>think</em> they'll behave.
             </p>
           </div>
-          <h4 className="text-xs font-bold text-gray-900 mb-2">The Pipeline</h4>
-          <div className="grid grid-cols-5 gap-2">
+          <h4 className="text-xs font-bold text-gray-900 mb-2">The Assessment Pipeline</h4>
+          <div className="grid grid-cols-3 gap-2">
             {[
-              { step: '1', title: 'Adaptive Assessment', desc: '15-25 scenario-based questions selected by AI' },
-              { step: '2', title: '10-Trait Scoring', desc: 'IRT-weighted Bayesian estimation of behavioral traits' },
-              { step: '3', title: 'Behavioral Flags', desc: 'Detect contradictions, risk patterns, flight risk' },
-              { step: '4', title: 'Product Matching', desc: 'Asymmetric scoring against product demand vectors' },
-              { step: '5', title: 'Strategy & Allocation', desc: 'Behavioral-optimal asset mix with rationale' },
+              { step: '1', title: 'Investor Profile', desc: 'Financial reality, emotional drivers, fears, knowledge, and experience' },
+              { step: '2', title: 'Behavioral Games', desc: '4 psychometric games measuring unconscious preferences' },
+              { step: '3', title: 'Comprehensive Report', desc: '6-dimension composite score, allocation, and approaches' },
             ].map(s => (
               <div key={s.step} className="p-3 bg-gray-50 rounded-xl text-center border border-gray-100">
-                <div className="text-lg font-extrabold text-blue-800 mb-1">{s.step}</div>
+                <div className="text-lg font-extrabold text-teal-700 mb-1">{s.step}</div>
                 <div className="text-[10px] font-bold text-gray-800">{s.title}</div>
                 <div className="text-[9px] text-gray-400 mt-1">{s.desc}</div>
               </div>
             ))}
+          </div>
+        </Card>)}
+
+        {active === 'journey' && (<Card>
+          <h2 className="text-base font-extrabold text-gray-900 mb-3">The Investor Journey</h2>
+          <p className="text-sm text-gray-600 leading-relaxed mb-4">
+            A systematic guided flow that takes an investor from raw data to a transparent, actionable assessment report.
+          </p>
+          <div className="space-y-3">
+            {[
+              { step: 'Step 1: Investor Profile', desc: 'Nine sections capturing the complete investor picture. Starts with emotional drivers (what money means, deepest fears, regret patterns), moves to knowledge and experience, then financial reality (income, obligations, assets, loss history, aspirations, decision structure). The financial capacity score acts as a HARD CEILING on risk allocation.', badge: '9 Sections' },
+              { step: 'Step 2: Behavioral Games', desc: 'Four psychometric games adapted from behavioral economics research. Risk Tolerance (Falk GPS Staircase), Loss Aversion (Adaptive Bisection), Time Preference (Koffarnus Adjusting Delay), and Herding (Social Proof). 19-22 trials in ~2.5 minutes. Measures unconscious preferences — harder to game than questionnaires.', badge: '~2.5 min' },
+              { step: 'Step 3: Comprehensive Report', desc: 'All data sources are fused via Bayesian Normal-Normal conjugate updating. The 6-dimension composite score combines financial capacity, behavioral patterns, fear-risk coherence, money meaning, knowledge, and market cycle. The report includes allocation recommendations, investment approaches, and behavioral flags — all in plain language.', badge: 'Transparent' },
+            ].map(s => (
+              <div key={s.step} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex items-center gap-2 mb-1">
+                  <h4 className="text-xs font-bold text-gray-900">{s.step}</h4>
+                  {s.badge && <Badge color="#0d9488">{s.badge}</Badge>}
+                </div>
+                <p className="text-[10.5px] text-gray-600 leading-relaxed">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </Card>)}
+
+        {active === 'meaning' && (<Card>
+          <h2 className="text-base font-extrabold text-gray-900 mb-3">Meaning of Money Framework</h2>
+          <p className="text-sm text-gray-600 leading-relaxed mb-4">
+            Before any numbers, we ask: what does money <em>mean</em> to this person? The answer shapes every recommendation. An investor seeking security needs fundamentally different products than one chasing the game of wealth creation.
+          </p>
+          <h4 className="text-xs font-bold text-gray-900 mb-2">Five Money Archetypes</h4>
+          <div className="space-y-2 mb-4">
+            {[
+              { icon: '🛡️', label: 'Security', score: 25, desc: 'Money means never worrying. Portfolio must feel safe above all. Conservative allocation, capital protection focus.' },
+              { icon: '🌊', label: 'Freedom', score: 45, desc: 'Money means options. Invest to maximize optionality and avoid trapped capital. Balanced approach.' },
+              { icon: '✨', label: 'Lifestyle', score: 50, desc: 'Money means living well. Returns must fund experiences and comfort. Goal-linked investing.' },
+              { icon: '🏔️', label: 'Legacy', score: 60, desc: 'Money means building something lasting. Multi-generational compounding. Patient, growth-oriented.' },
+              { icon: '📈', label: 'The Game', score: 80, desc: 'Money is the score. Enjoys the building process. Aggressive, conviction-driven strategies.' },
+            ].map(m => (
+              <div key={m.label} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                <span className="text-xl">{m.icon}</span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-900">{m.label}</span>
+                    <span className="text-[10px] font-mono text-teal-600">Risk Score: {m.score}</span>
+                  </div>
+                  <p className="text-[10.5px] text-gray-600 mt-0.5">{m.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <h4 className="text-xs font-bold text-gray-900 mb-2">Fear-Risk Coherence</h4>
+          <p className="text-xs text-gray-600 leading-relaxed mb-3">
+            We measure whether an investor's fears align with their risk tolerance. The most dangerous combination: fear of missing out (FOMO) paired with panic response to drawdowns. This "expectation-fear conflict" is the #1 predictor of buying high and selling low.
+          </p>
+          <div className="bg-gray-900 p-3 rounded-xl text-xs text-green-400 font-mono leading-relaxed">
+            <p className="text-gray-400">// Coherence Score (0-100)</p>
+            <p>coherence = fear_score × 0.40</p>
+            <p className="ml-10">+ impact_score × 0.35</p>
+            <p className="ml-10">+ regret_score × 0.25</p>
           </div>
         </Card>)}
 
@@ -96,97 +156,140 @@ export default function Methodology() {
           ))}
         </>)}
 
-        {active === 'questions' && (<Card>
-          <h2 className="text-base font-extrabold text-gray-900 mb-3">Question Design Philosophy</h2>
+        {active === 'games' && (<Card>
+          <h2 className="text-base font-extrabold text-gray-900 mb-3">Behavioral Games — Measuring the Unconscious</h2>
           <p className="text-sm text-gray-600 leading-relaxed mb-4">
-            Every question is a carefully designed behavioral scenario — not a self-report like "How much risk can you handle?" We present realistic financial situations and measure <em>revealed preferences</em>.
+            Four adaptive games adapted from behavioral economics research. Unlike questionnaires, games measure <em>revealed preferences</em> through choices — harder to game, more accurate.
           </p>
-          <h4 className="text-xs font-bold text-gray-900 mb-2">Three-Tier Architecture</h4>
-          <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="space-y-3">
             {[
-              { tier: 'Anchor', color: '#1746a2', count: '5', desc: 'Always asked first. Establish baseline. Broad scenarios covering loss, time, uncertainty.' },
-              { tier: 'Diagnostic', color: '#0891b2', count: '10-15', desc: 'AI-selected to maximize info gain. Targets traits with highest uncertainty. No two assessments identical.' },
-              { tier: 'Calibration', color: '#d97706', count: '3-5', desc: 'Inserted every 3 diagnostics. Rephrase earlier scenarios to detect contradictions or random answers.' },
-            ].map(t => (
-              <div key={t.tier} className="p-3 rounded-xl" style={{ background: t.color + '08', border: `1px solid ${t.color}25` }}>
-                <Badge color={t.color}>{t.tier}</Badge>
-                <div className="text-xs font-bold text-gray-900 mt-2">{t.count} Questions</div>
-                <p className="text-[10.5px] text-gray-600 mt-1">{t.desc}</p>
+              { name: 'Risk Tolerance (Falk GPS Staircase)', trials: 5, desc: 'Binary choice: guaranteed amount vs 50% chance of larger payoff. Adaptive bisection converges to your switching point in 5 trials.', output: 'risk_tolerance_score (0-100)', sigma: '12.0' },
+              { name: 'Loss Aversion (Adaptive Bisection)', trials: 6, desc: 'Accept or reject 50/50 gambles with varying gain/loss ratios. Converges to your loss aversion lambda — how much more losses hurt vs gains.', output: 'loss_aversion_lambda (1.0-4.0)', sigma: '10.0' },
+              { name: 'Time Preference (Koffarnus Adjusting Delay)', trials: 5, desc: 'Choose between money now vs more money later with varying delays. Measures your discount rate — how much you value present vs future.', output: 'time_preference_k (discount rate)', sigma: '14.0' },
+              { name: 'Herding (Social Proof)', trials: 6, desc: 'Make choices with and without social signals ("87% chose X"). Measures whether your decisions shift toward the crowd.', output: 'herding_index (0-1)', sigma: '20.0' },
+            ].map(g => (
+              <div key={g.name} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-xs font-bold text-gray-900">{g.name}</h4>
+                  <Badge color="#0d9488">{g.trials} trials</Badge>
+                </div>
+                <p className="text-[10.5px] text-gray-600 leading-relaxed">{g.desc}</p>
+                <div className="flex gap-4 mt-2">
+                  <span className="text-[10px] font-mono text-teal-600">Output: {g.output}</span>
+                  <span className="text-[10px] font-mono text-slate-400">Sigma: {g.sigma}</span>
+                </div>
               </div>
             ))}
           </div>
-          <h4 className="text-xs font-bold text-gray-900 mb-2">Question Properties</h4>
-          <div className="space-y-2 text-xs text-gray-600">
-            <p><strong>Trait Weights (0-3):</strong> Each question measures 1-3 traits. A "portfolio drops 20%" question has loss_aversion weight=3, emotional_volatility weight=1.5.</p>
-            <p><strong>Difficulty (0-1):</strong> Easy questions (0.2) are answered similarly by most. Hard questions (0.8) differentiate moderate from high trait levels.</p>
-            <p><strong>Discrimination (0.5-3.0):</strong> How well the question separates high from low. High discrimination = very informative.</p>
-            <p><strong>Options:</strong> 4 choices, each assigning 0-100 to each measured trait. Designed as a gradient, not right/wrong.</p>
+        </Card>)}
+
+        {active === 'composite' && (<Card>
+          <h2 className="text-base font-extrabold text-gray-900 mb-3">6-Dimension Composite Scoring</h2>
+          <p className="text-sm text-gray-600 leading-relaxed mb-4">
+            The composite risk score combines six independent dimensions, each measuring a different facet of risk capacity and tolerance. This is not a simple average — each dimension is weighted by its predictive importance.
+          </p>
+          <h4 className="text-xs font-bold text-gray-900 mb-2">The Master Formula</h4>
+          <div className="bg-gray-900 p-4 rounded-xl mb-4 text-xs text-green-400 font-mono leading-relaxed">
+            <p>Composite Score (0-100) =</p>
+            <p className="ml-4">Financial Capacity  × <span className="text-yellow-400">25%</span></p>
+            <p className="ml-4">Behavioral Pattern   × <span className="text-yellow-400">25%</span></p>
+            <p className="ml-4">Fear-Risk Coherence  × <span className="text-yellow-400">20%</span></p>
+            <p className="ml-4">Money Meaning        × <span className="text-yellow-400">15%</span></p>
+            <p className="ml-4">Knowledge            × <span className="text-yellow-400">10%</span></p>
+            <p className="ml-4">Market Cycle         × <span className="text-yellow-400"> 5%</span></p>
+          </div>
+          <div className="space-y-2 mb-4">
+            {[
+              { dim: 'Financial Capacity (25%)', desc: 'Structural ability to bear risk: liquidity runway, obligation coverage, time horizon, income stability, net worth. Acts as HARD CEILING — behavioral willingness cannot exceed structural capacity.' },
+              { dim: 'Behavioral Pattern (25%)', desc: 'Actual behavior under stress from games and transaction analysis. Past downturn actions, drop reactions, recovery patterns. Transaction data (narrow CI) overrides stated preferences.' },
+              { dim: 'Fear-Risk Coherence (20%)', desc: 'Internal consistency between fears and tolerance. Worst fear mapped to risk score, 30% portfolio drop impact, regret preference. Detects dangerous mismatches like FOMO + panic.' },
+              { dim: 'Money Meaning (15%)', desc: 'Emotional driver: Security (25), Freedom (45), Lifestyle (50), Legacy (60), Game (80). Shapes the entire recommendation framework.' },
+              { dim: 'Knowledge & Experience (10%)', desc: 'Knowledge level (Basic/Intermediate/Advanced/Expert) + breadth of investment experience across asset classes. 60% knowledge + 40% experience.' },
+              { dim: 'Market Cycle (5%)', desc: 'Current market regime adjustment. Expansion, Consolidation, or Contraction affects the recommended risk level slightly.' },
+            ].map(d => (
+              <div key={d.dim} className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                <h5 className="text-xs font-bold text-gray-900">{d.dim}</h5>
+                <p className="text-[10.5px] text-gray-600 mt-1">{d.desc}</p>
+              </div>
+            ))}
+          </div>
+          <h4 className="text-xs font-bold text-gray-900 mb-2">Hard Constraints (Equity Ceiling)</h4>
+          <div className="space-y-1.5 text-[10.5px] text-gray-600">
+            <p>Emergency fund {'<'} 3 months → equity capped at 40%</p>
+            <p>Time horizon {'<'} 1 year → equity capped at 10%</p>
+            <p>Wealth concentration {'>'} 60% → equity reduced by 15%</p>
+            <p>Wealth concentration {'>'} 80% → equity reduced by 25%</p>
+            <p>No equity experience → composite capped at 60</p>
+            <p>Expectation-fear conflict → composite capped at 50</p>
           </div>
         </Card>)}
 
-        {active === 'adaptive' && (<Card>
-          <h2 className="text-base font-extrabold text-gray-900 mb-3">Computerized Adaptive Testing (CAT)</h2>
+        {active === 'matrix' && (<Card>
+          <h2 className="text-base font-extrabold text-gray-900 mb-3">Liquidity x Drawdown Matrix</h2>
           <p className="text-sm text-gray-600 leading-relaxed mb-4">
-            Instead of a fixed questionnaire, the engine uses CAT — the same technology behind GRE/GMAT. Each question is selected in real-time to maximize information gain.
+            Investors are positioned in a 2x2 matrix based on two critical dimensions: how much they need access to their money (liquidity) and how much portfolio volatility they can stomach (drawdown tolerance).
           </p>
-          <h4 className="text-xs font-bold text-gray-900 mb-2">The Algorithm</h4>
-          <div className="bg-gray-900 p-4 rounded-xl mb-4 text-xs text-green-400 font-mono leading-relaxed">
-            <p>1. Ask 5 ANCHOR questions (always the same)</p>
-            <p>2. Compute initial trait scores and confidence</p>
-            <p>3. Find trait with LOWEST confidence</p>
-            <p>4. Select DIAGNOSTIC with highest:</p>
-            <p className="ml-4">score = trait_weight × discrimination × (1 - confidence/100)</p>
-            <p>5. Every 3 diagnostics → insert CALIBRATION</p>
-            <p>6. Re-compute all traits after each answer</p>
-            <p>7. STOP when: avg confidence ≥ 72% AND ≥ 15 questions</p>
-            <p>8. Hard cap: 25 questions</p>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            {[
+              { cell: 'Liquid Growth (HL_HD)', desc: 'Need liquidity + handle volatility. Diversified equity, global allocation, concentrated quality.', color: '#059669' },
+              { cell: 'Patient Capital (LL_HD)', desc: 'Can lock money + handle volatility. Private markets, long-horizon compounding, thematic conviction.', color: '#7c3aed' },
+              { cell: 'Capital-Protected Growth (HL_LD)', desc: 'Need liquidity + low volatility. Bond strategies, low-vol equity, dynamic allocation.', color: '#0891b2' },
+              { cell: 'Structured Stability (LL_LD)', desc: 'Can lock money + low volatility. Structured returns, target-date approaches, defined outcomes.', color: '#d97706' },
+            ].map(c => (
+              <div key={c.cell} className="p-3 rounded-xl border border-gray-200" style={{ borderLeftWidth: 4, borderLeftColor: c.color }}>
+                <h5 className="text-xs font-bold text-gray-900">{c.cell}</h5>
+                <p className="text-[10.5px] text-gray-600 mt-1">{c.desc}</p>
+              </div>
+            ))}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-3 bg-green-50 rounded-lg">
-              <div className="text-xs font-bold text-green-800">Fewer Questions, Same Accuracy</div>
-              <p className="text-[10.5px] text-green-700 mt-1">Fixed questionnaires need 40+ questions. CAT achieves same accuracy in 15-25 by targeting uncertainty.</p>
-            </div>
-            <div className="p-3 bg-green-50 rounded-lg">
-              <div className="text-xs font-bold text-green-800">Personalized Paths</div>
-              <p className="text-[10.5px] text-green-700 mt-1">A cautious and aggressive investor get different questions, probing their specific patterns.</p>
-            </div>
+          <div className="bg-gray-900 p-3 rounded-xl text-xs text-green-400 font-mono">
+            <p>High Liquidity = upcoming obligations {'>'} 0 OR horizon {'<'} 7 years</p>
+            <p>High Drawdown OK = behavioral_score {'>'}= 55 AND coherence {'>'}= 50</p>
           </div>
         </Card>)}
 
-        {active === 'scoring' && (<Card>
-          <h2 className="text-base font-extrabold text-gray-900 mb-3">Scoring — IRT-Weighted Bayesian Estimation</h2>
+        {active === 'approaches' && (<Card>
+          <h2 className="text-base font-extrabold text-gray-900 mb-3">Investment Approaches — Regulatory-Safe</h2>
           <p className="text-sm text-gray-600 leading-relaxed mb-4">
-            Not a simple average. Questions with higher discrimination and trait relevance count more heavily.
+            Instead of recommending specific products (which requires SEBI RIA registration), we recommend <em>approaches</em> — strategy families suited to the investor's profile. Each approach has a minimum profile tier.
           </p>
-          <h4 className="text-xs font-bold text-gray-900 mb-2">The Formula</h4>
-          <div className="bg-gray-900 p-4 rounded-xl mb-4 text-xs text-green-400 font-mono leading-relaxed">
-            <p className="text-gray-400">// For each trait:</p>
-            <p>score = Σ(option_score × trait_weight × discrimination)</p>
-            <p className="ml-8">/ Σ(trait_weight × discrimination)</p>
-            <p className="mt-2 text-gray-400">// Confidence:</p>
-            <p>confidence = min(95, 40 + relevant_question_count × 15)</p>
+          <div className="space-y-2">
+            {[
+              { tier: 'Tier 0 — All Profiles', approaches: ['Capital Protection Strategy', 'Income Generation Approach', 'Gold & Real Asset Allocation'], color: '#059669' },
+              { tier: 'Tier 1 — Moderate-Conservative+', approaches: ['Low-Volatility Equity Strategy', 'Dynamic Asset Allocation'], color: '#0891b2' },
+              { tier: 'Tier 2 — Moderate+', approaches: ['Diversified Growth Strategy', 'Global Equity Allocation', 'Concentrated Quality Strategy'], color: '#d97706' },
+              { tier: 'Tier 3 — Moderate-Aggressive+', approaches: ['Long-Horizon Compounding', 'Private Markets Access', 'Thematic & Sectoral Conviction'], color: '#dc2626' },
+            ].map(t => (
+              <div key={t.tier} className="p-3 rounded-xl border border-gray-200" style={{ borderLeftWidth: 4, borderLeftColor: t.color }}>
+                <h5 className="text-xs font-bold" style={{ color: t.color }}>{t.tier}</h5>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {t.approaches.map(a => (
+                    <span key={a} className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{a}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-          <h4 className="text-xs font-bold text-gray-900 mb-2">In Plain English</h4>
-          <p className="text-xs text-gray-600 leading-relaxed mb-3">
-            If you answer 3 questions measuring loss aversion: Q1 (weight 3, discrimination 2.0) counts 6x. Q2 (weight 1, discrimination 1.5) counts 1.5x. Q3 calibration (weight 0.5, discrimination 1.0) counts 0.5x. Final score = weighted average, not simple average.
-          </p>
-          <p className="text-xs text-gray-600">
-            Confidence starts at 10%. After 1 question: ~55%. After 2: ~70%. After 4+: ~95%. Assessment stops at 72% average confidence across all traits.
-          </p>
+          <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200">
+            <h5 className="text-xs font-bold text-amber-800">Special Approaches</h5>
+            <p className="text-[10.5px] text-amber-700 mt-1"><strong>Legacy meaning + intermediate knowledge+:</strong> Intergenerational Wealth Framework — 20+ year multi-generational compounding</p>
+            <p className="text-[10.5px] text-amber-700 mt-0.5"><strong>Security meaning:</strong> All-Weather Portfolio — performs adequately in all market regimes</p>
+          </div>
         </Card>)}
 
         {active === 'flags' && (<Card>
           <h2 className="text-base font-extrabold text-gray-900 mb-3">Behavioral Flag Detection</h2>
           <p className="text-sm text-gray-600 leading-relaxed mb-4">
-            Dangerous behavioral <em>combinations</em> that predict specific problems. Individual traits aren't "bad" — it's the interactions.
+            Dangerous behavioral <em>combinations</em> and structural gaps that predict specific problems. Flags are generated from both the composite analysis and the 10-trait model.
           </p>
           <div className="space-y-2">
             {[
-              { flag: '🚨 Flight Risk', cond: 'LA > 75 AND EV > 65', danger: 'Highest predictor of panic selling at worst time.', action: 'Proactive calls within 24hrs of 5%+ drop. Downside-protected structures.' },
-              { flag: '⚠️ Leverage-Loss Contradiction', cond: 'LC > 70 AND LA > 60', danger: 'Comfortable with leverage in theory but panics in leveraged losses.', action: 'Test tiny allocations first. Expect immediate exit demand if losses.' },
-              { flag: '⚠️ Disposition Effect', cond: 'RS > 75', danger: 'Holds losers too long, sells winners too early.', action: 'Systematic rebalancing with pre-agreed rules. ONE recommendation only.' },
-              { flag: '🚨 Extreme Volatility', cond: 'EV > 80', danger: '#1 predictor of permanent capital loss.', action: 'Quarterly visibility only. "Call before sell" protocol.' },
-              { flag: 'ℹ️ Rigid Goals + Short Patience', cond: 'GR > 80 AND HT < 40', danger: 'Non-negotiable deadlines but won\'t wait.', action: 'Target-date funds, FMPs, structured maturity products.' },
+              { flag: '🔴 Expectation-Fear Conflict', cond: 'FOMO fear + panic/anxious impact', danger: '#1 predictor of buying high and selling low. The investor wants returns but cannot handle the volatility required.', action: 'Cap composite at 50. Start conservative, increase only after surviving a real drawdown.' },
+              { flag: '🟡 Unproven Under Stress', cond: 'No equity experience', danger: 'Stated risk tolerance is theoretical. Many discover their true tolerance only during their first crash.', action: 'Begin with lower equity than model suggests. Use SIPs. Real profile emerges after first correction.' },
+              { flag: '🟡 Over-Concentrated', cond: 'Wealth concentration > 60%', danger: 'A major drawdown here affects entire financial life, not just this portfolio.', action: 'Reduce concentration before increasing risk. Diversify across instruments and asset classes.' },
+              { flag: '🔴 Insufficient Safety Net', cond: 'Emergency fund < 6 months', danger: 'Job loss, health crisis, or market downturn could force liquidation at worst time.', action: 'Build emergency fund to 6-12 months before any equity allocation. More important than returns.' },
+              { flag: '🔴 Flight Risk', cond: 'LA > 75 AND EV > 65', danger: 'Highest predictor of panic selling at worst time.', action: 'Proactive calls within 24hrs of 5%+ drop. Downside-protected structures.' },
+              { flag: '⚠️ Leverage-Loss Contradiction', cond: 'LC > 70 AND LA > 60', danger: 'Comfortable with leverage in theory but panics in leveraged losses.', action: 'Test tiny allocations first. Expect immediate exit demand if losses occur.' },
             ].map((f, i) => (
               <div key={i} className="p-3 rounded-xl bg-gray-50 border border-gray-100">
                 <div className="text-xs font-bold text-gray-900">{f.flag}</div>
@@ -201,7 +304,7 @@ export default function Methodology() {
         {active === 'matching' && (<Card>
           <h2 className="text-base font-extrabold text-gray-900 mb-3">Product Matching — Asymmetric Scoring</h2>
           <p className="text-sm text-gray-600 leading-relaxed mb-4">
-            Each product has a 10-dimensional demand vector. Matching uses asymmetric penalties because under-preparation is dangerous, over-preparation is just suboptimal.
+            Each product has a 10-dimensional demand vector. Matching uses asymmetric penalties because under-preparation is dangerous, over-preparation is just suboptimal. Think of it as an investor-product "marriage compatibility" score.
           </p>
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="p-3 bg-red-50 rounded-xl border border-red-200">
@@ -215,36 +318,7 @@ export default function Methodology() {
           </div>
           <div className="bg-gray-900 p-3 rounded-xl text-xs text-green-400 font-mono">
             <p>fit_score = 100 - avg(asymmetric_gaps)</p>
-            <p>RECOMMENDED ≥ 75 | CONDITIONAL ≥ 55 | CAUTION {'<'} 55</p>
-          </div>
-        </Card>)}
-
-        {active === 'allocation' && (<Card>
-          <h2 className="text-base font-extrabold text-gray-900 mb-3">Strategy Engine — Behavioral-Optimal Allocation</h2>
-          <p className="text-sm text-gray-600 leading-relaxed mb-4">
-            Translates traits into a target allocation designed to maximize what an investor can <em>actually stick with</em>.
-          </p>
-          <div className="bg-gray-900 p-3 rounded-xl mb-4 text-xs text-green-400 font-mono leading-relaxed">
-            <p>risk_appetite = (100-LA)×0.20 + HT×0.20 + (100-LS)×0.10</p>
-            <p className="ml-16">+ BS×0.15 + AT×0.15 + (100-EV)×0.10</p>
-            <p className="ml-16">+ LC×0.05 + DC×0.05</p>
-          </div>
-          <div className="space-y-1.5">
-            {[
-              { label: 'Aggressive (70-100)', eq: '55-70%', debt: '10-20%', hy: '5-15%', alt: '5-15%', liq: '3-8%', color: '#dc2626' },
-              { label: 'Moderate Growth (50-69)', eq: '35-50%', debt: '20-30%', hy: '10-20%', alt: '3-10%', liq: '5-15%', color: '#d97706' },
-              { label: 'Conservative Growth (30-49)', eq: '20-35%', debt: '30-45%', hy: '15-25%', alt: '0-5%', liq: '10-20%', color: '#059669' },
-              { label: 'Conservative (0-29)', eq: '5-20%', debt: '40-55%', hy: '15-25%', alt: '0-3%', liq: '15-25%', color: '#1746a2' },
-            ].map(a => (
-              <div key={a.label} className="flex items-center gap-2 p-2 rounded bg-gray-50 text-[10.5px]">
-                <span className="font-bold w-40" style={{ color: a.color }}>{a.label}</span>
-                <span className="w-16">Eq {a.eq}</span>
-                <span className="w-16">Debt {a.debt}</span>
-                <span className="w-16">Hy {a.hy}</span>
-                <span className="w-14">Alt {a.alt}</span>
-                <span className="w-14">Liq {a.liq}</span>
-              </div>
-            ))}
+            <p>RECOMMENDED {'≥'} 75 | CONDITIONAL {'≥'} 55 | CAUTION {'<'} 55</p>
           </div>
         </Card>)}
 
@@ -252,21 +326,21 @@ export default function Methodology() {
           <h2 className="text-base font-extrabold text-gray-900 mb-3">Research Foundations</h2>
           <div className="space-y-3">
             {[
-              { title: 'Prospect Theory: An Analysis of Decision under Risk', authors: 'Kahneman & Tversky', year: '1979', journal: 'Econometrica', use: 'Loss aversion scoring foundation' },
-              { title: 'Myopic Loss Aversion and the Equity Premium Puzzle', authors: 'Benartzi & Thaler', year: '1995', journal: 'QJE', use: 'Horizon tolerance measurement' },
-              { title: 'Mental Accounting Matters', authors: 'Thaler', year: '1999', journal: 'J. Behavioral Decision Making', use: 'Goal rigidity trait design' },
+              { title: 'Prospect Theory: An Analysis of Decision under Risk', authors: 'Kahneman & Tversky', year: '1979', journal: 'Econometrica', use: 'Loss aversion scoring, fear-risk coherence' },
+              { title: 'Myopic Loss Aversion and the Equity Premium Puzzle', authors: 'Benartzi & Thaler', year: '1995', journal: 'QJE', use: 'Horizon tolerance, time preference games' },
+              { title: 'Mental Accounting Matters', authors: 'Thaler', year: '1999', journal: 'J. Behavioral Decision Making', use: 'Goal rigidity, money meaning framework' },
               { title: 'Item Response Theory for Psychologists', authors: 'Embretson & Reise', year: '2000', journal: 'Lawrence Erlbaum', use: 'IRT scoring methodology' },
-              { title: 'Trading Is Hazardous to Your Wealth', authors: 'Barber & Odean', year: '2000', journal: 'J. Finance', use: 'Decision confidence calibration' },
-              { title: 'Regret Theory: An Alternative Theory of Rational Choice', authors: 'Loomes & Sugden', year: '1982', journal: 'Economic Journal', use: 'Regret sensitivity measurement' },
-              { title: 'Risk as Feelings', authors: 'Loewenstein, Weber, Hsee, Welch', year: '2001', journal: 'Psychological Bulletin', use: 'Emotional volatility framework' },
-              { title: 'Computerized Adaptive Testing: A Primer', authors: 'Wainer et al.', year: '2000', journal: 'Lawrence Erlbaum', use: 'CAT algorithm design' },
+              { title: 'Trading Is Hazardous to Your Wealth', authors: 'Barber & Odean', year: '2000', journal: 'J. Finance', use: 'Decision confidence, overtrading metrics' },
+              { title: 'Regret Theory: An Alternative Theory of Rational Choice', authors: 'Loomes & Sugden', year: '1982', journal: 'Economic Journal', use: 'Regret sensitivity, regret preference scoring' },
+              { title: 'Risk as Feelings', authors: 'Loewenstein, Weber, Hsee, Welch', year: '2001', journal: 'Psychological Bulletin', use: 'Emotional volatility, fear landscape design' },
               { title: 'Ambiguity Aversion in the Small and in the Large', authors: 'Ellsberg', year: '1961', journal: 'QJE', use: 'Ambiguity tolerance measurement' },
-              { title: 'Disposition to Sell Winners and Ride Losers', authors: 'Shefrin & Statman', year: '1985', journal: 'J. Finance', use: 'Behavioral flags for disposition effect' },
+              { title: 'Disposition to Sell Winners and Ride Losers', authors: 'Shefrin & Statman', year: '1985', journal: 'J. Finance', use: 'Transaction scoring, disposition effect' },
+              { title: 'The Most Important Thing', authors: 'Howard Marks', year: '2011', journal: 'Columbia Business School', use: 'Risk management philosophy, wisdom quotes' },
             ].map((r, i) => (
               <div key={i} className="p-3 bg-gray-50 rounded-lg border border-gray-100">
                 <div className="text-xs font-bold text-gray-900">{r.title}</div>
                 <div className="text-[10px] text-gray-500">{r.authors} ({r.year}) — {r.journal}</div>
-                <div className="text-[10px] text-blue-600 mt-1">Used for: {r.use}</div>
+                <div className="text-[10px] text-teal-600 mt-1">Used for: {r.use}</div>
               </div>
             ))}
           </div>

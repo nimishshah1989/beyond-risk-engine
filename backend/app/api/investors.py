@@ -6,7 +6,8 @@ from typing import List, Optional
 from datetime import datetime
 from app.models.database import (
     get_db, Investor, Assessment, InvestorResponse,
-    QuestionItem, AssessmentStatus, BehavioralProfile
+    QuestionItem, AssessmentStatus, BehavioralProfile,
+    InvestorFinancialContext, GameSession, DocumentUpload,
 )
 from app.services.scoring import (
     compute_trait_scores, compute_behavioral_flags,
@@ -62,12 +63,19 @@ def list_investors(db: Session = Depends(get_db)):
             Assessment.investor_id == i.id, Assessment.status == AssessmentStatus.COMPLETED
         ).order_by(Assessment.completed_at.desc()).first()
         bp = db.query(BehavioralProfile).filter_by(investor_id=i.id).first()
+        has_ctx = db.query(InvestorFinancialContext).filter_by(investor_id=i.id).first() is not None
+        has_game = db.query(GameSession).filter_by(investor_id=i.id, status="completed").first() is not None
+        has_docs = db.query(DocumentUpload).filter_by(investor_id=i.id).filter(
+            DocumentUpload.status.in_(["scored", "complete", "parsed"])).first() is not None
         result.append({
             "id": i.id, "name": i.name, "code": i.code, "age": i.age,
             "aum": i.aum, "segment": i.segment,
             "latest_assessment_id": latest.id if latest else None,
             "profile_source": bp.data_sources if bp else None,
             "composite_score": bp.composite_risk_score if bp else None,
+            "has_financial_context": has_ctx,
+            "has_game_session": has_game,
+            "has_documents": has_docs,
         })
     return result
 

@@ -1,4 +1,5 @@
 """Unified Behavioral Profile & Market Cycle API."""
+import asyncio
 import logging, math
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,6 +14,8 @@ from app.services.bayesian_fusion import (
 )
 from app.services.games_engine import map_game_scores_to_traits
 from app.services.financial_context import compute_financial_capacity, analyze_loss_experience
+from app.services.composite_scorer import compute_comprehensive_report
+from app.services.commentary_generator import generate_commentary, build_commentary_input
 
 # Market cycle service may not exist yet — degrade gracefully
 try:
@@ -54,8 +57,15 @@ def _empty_profile(investor_id: int) -> dict:
 def _extract_psychometric(s: GameSession) -> dict:
     """Build psychometric trait dict from a completed GameSession."""
     la_lambda = s.loss_aversion_lambda or 2.25
-    tp_score, tp_sigma = 50.0, s.time_preference_sigma or 14.0
-    if s.time_preference_k is not None:
+    tp_sigma = s.time_preference_sigma or 14.0
+    # Compute patience score from k values (new premium bisection model)
+    tp_score = 50.0
+    k_short = getattr(s, 'time_preference_k_short', None)
+    k_long = getattr(s, 'time_preference_k_long', None)
+    if k_short is not None and k_long is not None:
+        geo_mean = math.sqrt(max(k_short, 0.001) * max(k_long, 0.001))
+        tp_score = max(0, min(100, round(100 - geo_mean * 120)))
+    elif s.time_preference_k is not None:
         tp_score = max(0, min(100, round(90 - math.log10(max(s.time_preference_k, 1e-6)) * 20)))
     return map_game_scores_to_traits({
         "risk_tolerance_score": s.risk_tolerance_score,
@@ -199,6 +209,8 @@ def recalculate_profile(investor_id: int, db: Session = Depends(get_db)):
         profile.liquidity_buffer = assess.liquidity_buffer
     say_do_alerts = generate_say_do_alerts(fused.get("_say_do_details", {}))
     profile.behavioral_flags = (profile.behavioral_flags or []) + say_do_alerts
+    # Clear cached commentary so it regenerates with fresh data
+    profile.conversation_guide = None
     profile.updated_at = datetime.utcnow()
     db.flush()
 
@@ -211,6 +223,128 @@ def recalculate_profile(investor_id: int, db: Session = Depends(get_db)):
     logger.info("Profile recalculated for investor %d: sources=%s, composite=%.1f",
                 investor_id, fused["_data_sources"], composite)
     return get_profile(investor_id, db)
+
+# ─── Comprehensive Report ───
+
+@router.get("/profiles/{investor_id}/comprehensive-report")
+def get_comprehensive_report(investor_id: int, db: Session = Depends(get_db)):
+    """Get the full comprehensive assessment report combining all data sources."""
+    investor = db.query(Investor).filter_by(id=investor_id).first()
+    if not investor:
+        raise HTTPException(status_code=404, detail="Investor not found")
+
+    # Financial context (required for composite scoring)
+    ctx = db.query(InvestorFinancialContext).filter_by(investor_id=investor_id).first()
+    if not ctx:
+        raise HTTPException(status_code=404, detail="Financial context not yet captured. Complete the investor profile first.")
+
+    # Behavioral profile (optional — may not exist yet)
+    profile = db.query(BehavioralProfile).filter_by(investor_id=investor_id).first()
+    game_scores = None
+    behavioral_data = None
+    if profile:
+        game_scores = {"composite_risk_score": profile.composite_risk_score}
+        behavioral_data = {
+            "trait_scores": _build_trait_scores(profile),
+            "composite_risk_score": profile.composite_risk_score,
+            "data_sources": profile.data_sources,
+            "say_do_gap": profile.say_do_gap,
+            "say_do_details": profile.say_do_details,
+            "behavioral_flags": profile.behavioral_flags or [],
+            "stress_prediction": profile.stress_prediction,
+            "conversation_guide": profile.conversation_guide,
+        }
+
+    # Market regime
+    regime = get_cached_regime(db)
+
+    # Compute comprehensive report
+    report = compute_comprehensive_report(ctx, game_scores, behavioral_data, regime)
+
+    # Add investor info
+    report["investor"] = {
+        "id": investor.id,
+        "name": investor.name,
+        "code": investor.code,
+        "aum": investor.aum,
+        "segment": investor.segment,
+    }
+
+    # Data source confidence metadata
+    game = (db.query(GameSession).filter_by(investor_id=investor_id, status="completed")
+            .order_by(GameSession.completed_at.desc()).first())
+    txn_score = (db.query(TransactionScore).filter_by(investor_id=investor_id)
+                 .order_by(TransactionScore.computed_at.desc()).first())
+    assess = (db.query(Assessment)
+              .filter(Assessment.investor_id == investor_id, Assessment.status == "completed")
+              .order_by(Assessment.completed_at.desc()).first())
+
+    data_sources = {}
+    if game:
+        trial_count = len(game.trials) if hasattr(game, 'trials') else 0
+        data_sources["games"] = {
+            "available": True, "trials": trial_count,
+            "quality": game.consistency_score,
+            "confidence": "HIGH" if (game.consistency_score or 0) >= 60 else "MEDIUM",
+        }
+    if txn_score:
+        data_sources["transactions"] = {
+            "available": True, "n_transactions": txn_score.n_transactions,
+            "date_range_months": txn_score.date_range_months,
+            "confidence": "HIGH" if (txn_score.n_transactions or 0) >= 100 else "MEDIUM" if (txn_score.n_transactions or 0) >= 30 else "LOW",
+        }
+    if assess:
+        data_sources["questionnaire"] = {
+            "available": True, "questions": assess.total_questions,
+            "confidence": "MEDIUM",
+        }
+    data_sources["financial_context"] = {"available": ctx is not None}
+    report["data_sources"] = data_sources
+
+    return {"data": report}
+
+
+# ─── Commentary Endpoint ───
+
+@router.get("/profiles/{investor_id}/commentary")
+def get_commentary(investor_id: int, regenerate: bool = False, db: Session = Depends(get_db)):
+    """Get AI-generated behavioral commentary for an investor. Cached unless regenerate=true."""
+    investor = db.query(Investor).filter_by(id=investor_id).first()
+    if not investor:
+        raise HTTPException(status_code=404, detail="Investor not found")
+
+    profile = db.query(BehavioralProfile).filter_by(investor_id=investor_id).first()
+    if not profile or profile.composite_risk_score is None:
+        raise HTTPException(status_code=404, detail="No behavioral profile yet. Complete games or upload documents first.")
+
+    # Return cached if available and not regenerating
+    if not regenerate and profile.conversation_guide and isinstance(profile.conversation_guide, dict):
+        if "behavioral_summary" in profile.conversation_guide:
+            return {"data": profile.conversation_guide, "cached": True}
+
+    # Build input from all available data sources
+    ctx = db.query(InvestorFinancialContext).filter_by(investor_id=investor_id).first()
+    txn_score = db.query(TransactionScore).filter_by(investor_id=investor_id).order_by(
+        TransactionScore.computed_at.desc()).first()
+    game = db.query(GameSession).filter_by(
+        investor_id=investor_id, status="completed").order_by(
+        GameSession.completed_at.desc()).first()
+
+    input_data = build_commentary_input(profile, ctx, txn_score, game)
+    input_data["investor_name"] = investor.name
+    input_data["segment"] = investor.segment
+
+    # Run async commentary generation in sync context
+    result = asyncio.run(generate_commentary(input_data))
+    if not result:
+        return {"data": None, "error": "Commentary generation failed. Check API key."}
+
+    # Cache in profile
+    profile.conversation_guide = result
+    db.commit()
+    logger.info("Commentary cached for investor %d", investor_id)
+    return {"data": result, "cached": False}
+
 
 # ─── Market Endpoints ───
 

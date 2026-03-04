@@ -13,13 +13,29 @@ import pandas as pd
 logger = logging.getLogger("beyond_risk.transaction_scorer")
 
 
+def _deplete_lots(lots: List[tuple], sold_units: float) -> List[tuple]:
+    """Remove sold units from lot records using FIFO."""
+    remaining = sold_units
+    new_lots = []
+    for units, nav in lots:
+        if remaining <= 0:
+            new_lots.append((units, nav))
+        elif units <= remaining:
+            remaining -= units
+        else:
+            new_lots.append((units - remaining, nav))
+            remaining = 0
+    return new_lots
+
+
 def compute_disposition_effect(transactions: List[dict]) -> Tuple[float, float]:
     """Odean (1998) methodology — PGR vs PLR.
 
     Measures tendency to sell winners too early and hold losers too long.
     Score 50 = neutral, >50 = disposition effect present, <50 = reverse disposition.
     """
-    holdings = {}  # scheme -> [(units, purchase_nav)]
+    holdings = {}   # scheme -> [(units, purchase_nav)]
+    last_nav = {}   # scheme -> last known NAV (for paper gain/loss evaluation)
     realized_gains = 0
     realized_losses = 0
     paper_gains = 0
@@ -29,31 +45,40 @@ def compute_disposition_effect(transactions: List[dict]) -> Tuple[float, float]:
 
     for txn in sorted_txns:
         scheme = txn.get("scheme_name", "unknown")
+        nav = txn.get("nav") or 0
+
+        # Track last known NAV per scheme
+        if nav > 0:
+            last_nav[scheme] = nav
 
         if txn["type"] in ("PURCHASE", "PURCHASE_SIP", "SWITCH_IN"):
             units = abs(txn.get("units") or 0)
-            nav = txn.get("nav") or 0
             if units > 0 and nav > 0:
                 holdings.setdefault(scheme, []).append((units, nav))
 
-        elif txn["type"] in ("REDEMPTION", "SWITCH_OUT") and txn.get("nav"):
+        elif txn["type"] in ("REDEMPTION", "SWITCH_OUT") and nav:
             lots = holdings.get(scheme, [])
             if lots:
                 total_units = sum(u for u, _ in lots)
                 if total_units > 0:
                     avg_cost = sum(u * n for u, n in lots) / total_units
-                    if txn["nav"] > avg_cost:
+                    if nav > avg_cost:
                         realized_gains += 1
                     else:
                         realized_losses += 1
 
-                    # Count paper gains/losses on held schemes
+                    # Deplete sold units from holdings (FIFO)
+                    sold_units = abs(txn.get("units") or 0)
+                    holdings[scheme] = _deplete_lots(lots, sold_units)
+
+                    # Count paper gains/losses on OTHER held schemes using THEIR last known NAV
                     for other, other_lots in holdings.items():
                         if other != scheme and other_lots:
                             other_total = sum(u for u, _ in other_lots)
-                            if other_total > 0:
+                            other_nav = last_nav.get(other)
+                            if other_total > 0 and other_nav:
                                 other_avg = sum(u * n for u, n in other_lots) / other_total
-                                if txn["nav"] > other_avg:
+                                if other_nav > other_avg:
                                     paper_gains += 1
                                 else:
                                     paper_losses += 1
@@ -185,7 +210,7 @@ def compute_overtrading(transactions: List[dict]) -> Tuple[float, float]:
         max_date = pd.Timestamp(max_date)
     years = max(0.5, (max_date - min_date).days / 365)
 
-    avg_portfolio = (buys + sells) / 2
+    avg_portfolio = max(buys, sells)
     if avg_portfolio <= 0:
         return 0.0, 25.0
 
@@ -295,6 +320,16 @@ def compute_all_transaction_scores(investor_id: int, db) -> Dict:
         investor_id, len(txns), date_range_months, disp_score, sip_score, panic_score,
     )
 
+    # Data quality metrics
+    sip_count = sum(1 for t in txns if t["type"] == "PURCHASE_SIP")
+    unique_schemes = len({t["scheme_name"] for t in txns if t.get("scheme_name")})
+    if len(txns) >= 100 and date_range_months >= 24:
+        richness_label = "HIGH"
+    elif len(txns) >= 30 and date_range_months >= 12:
+        richness_label = "MEDIUM"
+    else:
+        richness_label = "LOW"
+
     return {
         "id": score_record.id,
         "disposition_effect": (disp_score, disp_sigma),
@@ -306,17 +341,33 @@ def compute_all_transaction_scores(investor_id: int, db) -> Dict:
         "recency_bias": (recency_score, recency_sigma),
         "n_transactions": len(txns),
         "date_range_months": date_range_months,
+        "data_quality": {
+            "n_transactions": len(txns),
+            "date_range_months": date_range_months,
+            "richness_label": richness_label,
+            "sip_count": sip_count,
+            "unique_schemes": unique_schemes,
+        },
     }
 
 
 def map_transaction_scores_to_traits(scores: Dict) -> Dict[str, Tuple[float, float]]:
-    """Map transaction scores to trait model for Bayesian fusion."""
+    """Map all 7 transaction scores to trait model for Bayesian fusion.
+
+    Includes inversions where high transaction metric = low trait score.
+    """
     if not scores:
         return {}
+
+    herding = scores.get("herding_score", (50, 25))
+    recency = scores.get("recency_bias", (50, 25))
 
     return {
         "disposition_effect": scores.get("disposition_effect", (50, 25)),
         "sip_discipline": scores.get("sip_discipline", (50, 25)),
         "panic_score": scores.get("panic_score", (50, 25)),
         "overtrading": scores.get("overtrading", (50, 25)),
+        "diversification": scores.get("diversification", (50, 25)),
+        "herding_inverted": (max(0, 100 - herding[0]), herding[1]),
+        "recency_inverted": (max(0, 100 - recency[0]), recency[1]),
     }

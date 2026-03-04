@@ -14,10 +14,10 @@ TRAIT_TO_TRANSACTION = {
     "regret_sensitivity": "disposition_effect",
     "horizon_tolerance": "sip_discipline",
     "liquidity_sensitivity": "overtrading",
-    "decision_confidence": None,  # no transaction equivalent
-    "ambiguity_tolerance": None,
+    "ambiguity_tolerance": "diversification",       # well-diversified = tolerates uncertainty
+    "decision_confidence": "herding_inverted",       # high herding = low decision confidence
+    "goal_rigidity": "recency_inverted",             # chasing trends = low goal rigidity
     "leverage_comfort": None,
-    "goal_rigidity": None,
 }
 
 TRAIT_IDS = [
@@ -146,6 +146,9 @@ def compute_composite_risk_score(profile_traits: Dict) -> float:
         "decision_confidence": 0.05,    # confident decisions
     }
 
+    # Normalize so abs(weights) sum to 1.0 — ensures 50 for neutral profile
+    total_abs = sum(abs(w) for w in weights.values())
+
     weighted_sum = 0.0
     for trait, weight in weights.items():
         trait_data = profile_traits.get(trait, {})
@@ -157,6 +160,7 @@ def compute_composite_risk_score(profile_traits: Dict) -> float:
         else:
             weighted_sum += score * weight
 
+    weighted_sum /= total_abs
     return round(max(0, min(100, weighted_sum)), 1)
 
 

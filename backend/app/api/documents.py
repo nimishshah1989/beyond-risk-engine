@@ -264,13 +264,24 @@ def _update_profile_from_transactions(investor_id: int, txn_scores: dict, db: Se
         from app.services.games_engine import map_game_scores_to_traits
         gs = db.query(GameSession).filter_by(id=profile.last_game_session_id).first()
         if gs and gs.status == "completed":
+            # Compute patience score from k values (same logic as profiles.py)
+            import math as _math
+            tp_score = 50.0
+            k_short = getattr(gs, 'time_preference_k_short', None)
+            k_long = getattr(gs, 'time_preference_k_long', None)
+            if k_short is not None and k_long is not None:
+                geo_mean = _math.sqrt(max(k_short, 0.001) * max(k_long, 0.001))
+                tp_score = max(0, min(100, round(100 - geo_mean * 120)))
+            elif gs.time_preference_k is not None:
+                tp_score = max(0, min(100, round(90 - _math.log10(max(gs.time_preference_k, 1e-6)) * 20)))
+
             game_scores = {
                 "risk_tolerance_score": gs.risk_tolerance_score,
                 "loss_aversion_lambda": gs.loss_aversion_lambda,
                 "loss_aversion_score": max(0, min(100, round((gs.loss_aversion_lambda - 0.5) / 4.0 * 100))) if gs.loss_aversion_lambda else 50,
                 "loss_aversion_sigma": gs.loss_aversion_sigma or 10,
                 "time_preference_k": gs.time_preference_k,
-                "time_preference_score": 50,
+                "time_preference_score": tp_score,
                 "time_preference_sigma": gs.time_preference_sigma or 14,
                 "herding_index": gs.herding_index,
                 "herding_score": round((gs.herding_index or 0) * 100),

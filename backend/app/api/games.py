@@ -19,14 +19,14 @@ from app.services.games_engine import (
     herding_get_scenarios, herding_get_with_signal, herding_score,
     compute_game_session_scores, map_game_scores_to_traits,
     RISK_MULTIPLIER_RANGE, LOSS_LAMBDA_RANGE,
-    DELAY_SEQUENCE, DELAY_LABELS,
+    TIME_SHORT_RANGE, TIME_LONG_RANGE, TIME_SHORT_TRIALS, TIME_LONG_TRIALS,
     round_to_clean_amount,
 )
 
 # Trial count constants
 RISK_TOLERANCE_TRIALS = 5
 LOSS_AVERSION_TRIALS = 5
-TIME_PREFERENCE_TRIALS = 5
+TIME_PREFERENCE_TRIALS = TIME_SHORT_TRIALS + TIME_LONG_TRIALS  # 5
 from app.services.bayesian_fusion import fuse_profiles, compute_composite_risk_score
 
 logger = logging.getLogger("beyond_risk.api.games")
@@ -87,15 +87,33 @@ def _get_game_state(session_id: int, game_type: str, db: Session) -> tuple:
         return current_range, len(trials)
 
     elif game_type == "time_preference":
-        current_range = [0, len(DELAY_SEQUENCE) - 1]
+        state = {
+            "short_range": list(TIME_SHORT_RANGE),
+            "long_range": list(TIME_LONG_RANGE),
+            "phase": "short",
+            "short_trials": 0,
+            "long_trials": 0,
+        }
         for t in trials:
             choice = t.response.get("choice", "")
-            idx = (current_range[0] + current_range[1]) // 2
-            if choice in ("immediate", "now"):
-                current_range = [current_range[0], idx]
+            phase = state["phase"]
+            if phase == "short":
+                mid = (state["short_range"][0] + state["short_range"][1]) / 2
+                if choice in ("now", "immediate"):
+                    state["short_range"] = [mid, state["short_range"][1]]
+                else:
+                    state["short_range"] = [state["short_range"][0], mid]
+                state["short_trials"] += 1
+                if state["short_trials"] >= TIME_SHORT_TRIALS:
+                    state["phase"] = "long"
             else:
-                current_range = [idx, current_range[1]]
-        return current_range, len(trials)
+                mid = (state["long_range"][0] + state["long_range"][1]) / 2
+                if choice in ("now", "immediate"):
+                    state["long_range"] = [mid, state["long_range"][1]]
+                else:
+                    state["long_range"] = [state["long_range"][0], mid]
+                state["long_trials"] += 1
+        return state, len(trials)
 
     elif game_type == "herding":
         p1_choices = []
@@ -232,21 +250,41 @@ def submit_trial(req: TrialRequest, db: Session = Depends(get_db)):
         }
 
     elif req.game_type == "time_preference":
-        current_range, count = _get_game_state(req.session_id, "time_preference", db)
+        state, count = _get_game_state(req.session_id, "time_preference", db)
         if count >= TIME_PREFERENCE_TRIALS:
             return {"complete": True, "game_type": "time_preference"}
-        new_idx = (current_range[0] + current_range[1]) // 2
-        new_idx = max(0, min(len(DELAY_SEQUENCE) - 1, new_idx))
-        return {
-            "next_stimulus": {
-                "immediate": anchor,
-                "delayed": round_to_clean_amount(anchor * 2),
-                "delay_days": DELAY_SEQUENCE[new_idx],
-                "delay_label": DELAY_LABELS[new_idx],
-                "trial": count + 1,
-            },
-            "game_type": "time_preference",
-        }
+        # Generate next stimulus from current state
+        phase = state["phase"]
+        if phase == "short":
+            rng = state["short_range"]
+            new_mid = (rng[0] + rng[1]) / 2
+            return {
+                "next_stimulus": {
+                    "immediate": anchor,
+                    "delayed": round_to_clean_amount(anchor * new_mid),
+                    "delay_years": 1,
+                    "delay_label": "1 year",
+                    "premium": round(new_mid, 3),
+                    "phase": "short",
+                    "trial": count + 1,
+                },
+                "game_type": "time_preference",
+            }
+        else:
+            rng = state["long_range"]
+            new_mid = (rng[0] + rng[1]) / 2
+            return {
+                "next_stimulus": {
+                    "immediate": anchor,
+                    "delayed": round_to_clean_amount(anchor * new_mid),
+                    "delay_years": 5,
+                    "delay_label": "5 years",
+                    "premium": round(new_mid, 3),
+                    "phase": "long",
+                    "trial": count + 1,
+                },
+                "game_type": "time_preference",
+            }
 
     elif req.game_type == "herding":
         (p1, p2), count = _get_game_state(req.session_id, "herding", db)
@@ -279,7 +317,7 @@ def complete_session(req: CompleteRequest, db: Session = Depends(get_db)):
     # Gather final state for each game
     risk_range, _ = _get_game_state(req.session_id, "risk_tolerance", db)
     loss_range, _ = _get_game_state(req.session_id, "loss_aversion", db)
-    time_range, _ = _get_game_state(req.session_id, "time_preference", db)
+    time_state, _ = _get_game_state(req.session_id, "time_preference", db)
     (herding_p1, herding_p2), _ = _get_game_state(req.session_id, "herding", db)
 
     # Gather all response times
@@ -288,7 +326,7 @@ def complete_session(req: CompleteRequest, db: Session = Depends(get_db)):
 
     # Compute scores
     scores = compute_game_session_scores(
-        risk_range, loss_range, time_range,
+        risk_range, loss_range, time_state,
         herding_p1, herding_p2, response_times,
         knowledge_level=knowledge,
     )
@@ -301,6 +339,8 @@ def complete_session(req: CompleteRequest, db: Session = Depends(get_db)):
     session.loss_aversion_lambda = scores["loss_aversion_lambda"]
     session.loss_aversion_sigma = scores["loss_aversion_sigma"]
     session.time_preference_k = scores["time_preference_k"]
+    session.time_preference_k_short = scores["time_preference_k_short"]
+    session.time_preference_k_long = scores["time_preference_k_long"]
     session.time_preference_sigma = scores["time_preference_sigma"]
     session.herding_index = scores["herding_index"]
     session.herding_sigma = scores["herding_sigma"]
@@ -354,6 +394,8 @@ def get_session(session_id: int, db: Session = Depends(get_db)):
             "loss_aversion_lambda": session.loss_aversion_lambda,
             "loss_aversion_sigma": session.loss_aversion_sigma,
             "time_preference_k": session.time_preference_k,
+            "time_preference_k_short": session.time_preference_k_short,
+            "time_preference_k_long": session.time_preference_k_long,
             "time_preference_sigma": session.time_preference_sigma,
             "herding_index": session.herding_index,
             "herding_sigma": session.herding_sigma,
@@ -388,8 +430,9 @@ def _update_behavioral_profile(investor_id: int, session_id: int, trait_map: dic
                 for trait, score in assessment.trait_scores.items()
             }
 
-    # Fuse game scores with existing questionnaire data
-    fused = fuse_profiles(trait_map, existing_psych)
+    # Merge game + questionnaire into one psychometric dict (games take priority)
+    merged_psych = {**existing_psych, **trait_map} if existing_psych else trait_map
+    fused = fuse_profiles(merged_psych, None)
 
     if not profile:
         profile = BehavioralProfile(investor_id=investor_id)

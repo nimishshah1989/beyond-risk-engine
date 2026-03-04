@@ -54,6 +54,10 @@ export const getInvestorUploads = (investorId) => request(`/api/documents/invest
 export const getProfile = (investorId) => request(`/api/profiles/${investorId}`);
 export const getProfileHistory = (investorId) => request(`/api/profiles/${investorId}/history`);
 export const recalculateProfile = (investorId) => request(`/api/profiles/${investorId}/recalculate`, { method: 'POST' });
+export const getComprehensiveReport = (investorId) => request(`/api/profiles/${investorId}/comprehensive-report`);
+
+// Commentary
+export const getCommentary = (investorId, regenerate = false) => request(`/api/profiles/${investorId}/commentary${regenerate ? '?regenerate=true' : ''}`);
 
 // Market
 export const getMarketRegime = () => request('/api/market/regime');

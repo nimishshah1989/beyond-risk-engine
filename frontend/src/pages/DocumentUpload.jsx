@@ -12,7 +12,7 @@ function detectFileType(name) {
   return FILE_TYPES[ext] ? ext : null;
 }
 
-export default function DocumentUpload({ investorId, investorName, onComplete }) {
+export default function DocumentUpload({ investorId, investorName, onComplete, embedded = false }) {
   const [file, setFile] = useState(null);
   const [password, setPassword] = useState('');
   const [fileType, setFileType] = useState(null);
@@ -49,8 +49,8 @@ export default function DocumentUpload({ investorId, investorName, onComplete })
           clearInterval(pollRef.current);
           fetchHistory();
         }
-        if (data.status === 'error') {
-          setError(data.message || 'Processing failed');
+        if (data.status === 'failed') {
+          setError(data.error || 'Processing failed');
           clearInterval(pollRef.current);
         }
       } catch (err) {
@@ -81,17 +81,22 @@ export default function DocumentUpload({ investorId, investorName, onComplete })
 
   const handleUpload = async () => {
     if (!file) return;
+    if (!investorId) { setError('No investor selected. Go to Central and select an investor first.'); return; }
     setUploading(true);
     setError(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('investor_id', investorId);
+      formData.append('investor_id', String(investorId));
       if (password) formData.append('password', password);
       const res = await fetch(`${BASE}/api/documents/upload`, { method: 'POST', body: formData });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Upload failed');
+        const detail = err.detail;
+        const msg = typeof detail === 'string' ? detail
+          : Array.isArray(detail) ? detail.map(d => d.msg || d.message || JSON.stringify(d)).join('; ')
+          : 'Upload failed';
+        throw new Error(msg);
       }
       const data = await res.json();
       setUploadId(data.upload_id);
@@ -106,13 +111,15 @@ export default function DocumentUpload({ investorId, investorName, onComplete })
 
   return (
     <div className="bg-slate-50 min-h-full p-6 space-y-5">
-      {/* Header */}
-      <div>
-        <h2 className="text-lg font-extrabold text-slate-900">Upload CAS / Demat Statement</h2>
-        <p className="text-xs text-slate-500 mt-0.5">
-          For <span className="font-bold text-teal-700">{investorName}</span> — upload portfolio documents to parse holdings and transactions
-        </p>
-      </div>
+      {/* Header — hidden when embedded in wizard */}
+      {!embedded && (
+        <div>
+          <h2 className="text-lg font-extrabold text-slate-900">Upload CAS / Demat Statement</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            For <span className="font-bold text-teal-700">{investorName}</span> — upload portfolio documents to parse holdings and transactions
+          </p>
+        </div>
+      )}
 
       {/* Drop zone + password */}
       <Card>
@@ -203,18 +210,22 @@ export default function DocumentUpload({ investorId, investorName, onComplete })
       {result && (
         <Card className="border-teal-200 bg-teal-50/30">
           <h3 className="text-sm font-bold text-teal-800 mb-3">Parsing Complete</h3>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <div className="bg-white p-3 rounded-lg border border-slate-200 text-center">
-              <div className="text-lg font-extrabold text-slate-900 font-mono tabular-nums">{result.folios ?? '—'}</div>
+              <div className="text-lg font-extrabold text-slate-900 font-mono tabular-nums">{result.total_folios ?? '—'}</div>
               <div className="text-[10px] text-slate-500 font-bold uppercase">Folios</div>
             </div>
             <div className="bg-white p-3 rounded-lg border border-slate-200 text-center">
-              <div className="text-lg font-extrabold text-slate-900 font-mono tabular-nums">{result.transactions ?? '—'}</div>
+              <div className="text-lg font-extrabold text-slate-900 font-mono tabular-nums">{result.total_transactions ?? '—'}</div>
               <div className="text-[10px] text-slate-500 font-bold uppercase">Transactions</div>
             </div>
             <div className="bg-white p-3 rounded-lg border border-slate-200 text-center">
-              <div className="text-xs font-bold text-slate-900 font-mono tabular-nums">{result.date_range ?? '—'}</div>
-              <div className="text-[10px] text-slate-500 font-bold uppercase">Date Range</div>
+              <div className="text-xs font-bold text-slate-900 font-mono tabular-nums">{result.statement_from || '—'}</div>
+              <div className="text-[10px] text-slate-500 font-bold uppercase">From</div>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-slate-200 text-center">
+              <div className="text-xs font-bold text-slate-900 font-mono tabular-nums">{result.statement_to || '—'}</div>
+              <div className="text-[10px] text-slate-500 font-bold uppercase">To</div>
             </div>
           </div>
           <div className="mt-4 flex justify-end">
@@ -238,7 +249,7 @@ export default function DocumentUpload({ investorId, investorName, onComplete })
                   </Badge>
                 </div>
                 <span className="text-[10px] text-slate-400 font-mono tabular-nums">
-                  {item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN') : ''}
+                  {(item.uploaded_at || item.created_at) ? new Date(item.uploaded_at || item.created_at).toLocaleDateString('en-IN') : ''}
                 </span>
               </div>
             ))}

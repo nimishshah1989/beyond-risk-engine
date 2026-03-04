@@ -123,9 +123,73 @@ function FormSkeleton() {
   );
 }
 
+// --- Field Mapping (frontend shorthand → backend API field names) ---
+
+const FIELD_MAP_TO_API = {
+  monthly_obligations: 'monthly_fixed_obligations',
+  annual_discretionary: 'annual_discretionary_spend',
+  obligation_1y: 'upcoming_obligations_1y',
+  obligation_3y: 'upcoming_obligations_3y',
+  obligation_5y: 'upcoming_obligations_5y',
+  obligation_10y: 'upcoming_obligations_10y',
+  equity_mf: 'existing_equity_mf',
+  debt_mf: 'existing_debt_mf',
+  direct_equity: 'existing_direct_equity',
+  fixed_deposits: 'existing_fixed_deposits',
+  real_estate: 'existing_real_estate_value',
+  gold: 'existing_gold',
+  ppf_epf_nps: 'existing_ppf_epf_nps',
+  insurance_corpus: 'existing_insurance_corpus',
+  other_investments: 'existing_other_investments',
+  cash_savings: 'existing_cash_savings',
+  primary_residence: 'primary_residence_value',
+  total_liabilities: 'existing_liabilities',
+  income_growth: 'income_growth_expectation',
+  has_loss_experience: 'has_experienced_real_loss',
+  loss_context: 'worst_loss_context',
+  loss_behavior: 'behavior_during_loss',
+  recovery_experience: 'loss_recovery_experience',
+  target_return: 'target_return_annual_pct',
+  time_horizon: 'time_horizon_years',
+  family_influence: 'family_influence_level',
+  has_advisor: 'existing_advisor_relationship',
+};
+
+const FIELD_MAP_FROM_API = Object.fromEntries(
+  Object.entries(FIELD_MAP_TO_API).map(([k, v]) => [v, k])
+);
+
+function toApiPayload(form) {
+  const payload = {};
+  for (const [key, val] of Object.entries(form)) {
+    if (val === '' || val === null || val === undefined) continue;
+    const apiKey = FIELD_MAP_TO_API[key] || key;
+    payload[apiKey] = val;
+  }
+  return payload;
+}
+
+function fromApiContext(ctx) {
+  if (!ctx || typeof ctx !== 'object') return {};
+  const form = {};
+  for (const [key, val] of Object.entries(ctx)) {
+    const formKey = FIELD_MAP_FROM_API[key] || key;
+    form[formKey] = val;
+  }
+  return form;
+}
+
 // --- Default State ---
 
 const EMPTY_FORM = {
+  // Meaning of money
+  money_meaning: '', first_instinct: '',
+  // Fear & emotional landscape
+  worst_fear: '', fear_impact: '', regret_preference: '',
+  // Knowledge & experience
+  knowledge_level: '', investment_experience: [], wealth_concentration: '',
+  equity_experience: null, downturn_behavior: '', recovery_behavior: '',
+  // Income & stability
   annual_income: '', income_source: '', income_stability: '', income_growth: '', years_to_retirement: '',
   monthly_obligations: '', annual_discretionary: '',
   obligation_1y: '', obligation_3y: '', obligation_5y: '', obligation_10y: '', obligation_notes: '',
@@ -145,7 +209,52 @@ const ASSET_FIELDS = [
   { key: 'other_investments', label: 'Other Investments' }, { key: 'cash_savings', label: 'Cash Savings' },
 ];
 
+const EXPERIENCE_OPTIONS = [
+  { value: 'direct_equity', label: 'Direct Equities' },
+  { value: 'equity_mf', label: 'Equity Mutual Funds' },
+  { value: 'debt_mf', label: 'Debt Mutual Funds' },
+  { value: 'bonds', label: 'Bonds / NCDs' },
+  { value: 'pms', label: 'PMS' },
+  { value: 'aif', label: 'AIF' },
+  { value: 'real_estate', label: 'Real Estate Investment' },
+  { value: 'gold', label: 'Gold / Commodities' },
+  { value: 'international', label: 'International Funds' },
+  { value: 'structured', label: 'Structured Products' },
+  { value: 'crypto', label: 'Crypto / Digital Assets' },
+  { value: 'fno', label: 'F&O / Derivatives' },
+];
+
+function EmotionCard({ icon, label, tag, description, selected, onClick }) {
+  return (
+    <button onClick={() => onClick(tag)} className={`flex flex-col items-center text-center p-4 rounded-xl border-2 transition-all ${selected ? 'border-teal-500 bg-teal-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}>
+      <span className="text-2xl mb-1.5">{icon}</span>
+      <span className={`text-xs font-bold ${selected ? 'text-teal-700' : 'text-slate-700'}`}>{label}</span>
+      {description && <span className="text-[10px] text-slate-400 mt-0.5 leading-tight">{description}</span>}
+    </button>
+  );
+}
+
+function CheckboxGroup({ options, selected, onChange }) {
+  const toggle = (val) => {
+    const set = new Set(selected || []);
+    if (set.has(val)) set.delete(val); else set.add(val);
+    onChange([...set]);
+  };
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map(o => (
+        <button key={o.value} onClick={() => toggle(o.value)} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${(selected || []).includes(o.value) ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const SECTIONS = [
+  { title: 'Meaning of Money', icon: '💎' },
+  { title: 'Fear & Emotional Landscape', icon: '🌊' },
+  { title: 'Knowledge & Experience', icon: '📚' },
   { title: 'Income & Stability', icon: '💼' },
   { title: 'Obligations & Liquidity Needs', icon: '📅' },
   { title: 'Existing Assets (Balance Sheet)', icon: '🏦' },
@@ -182,7 +291,10 @@ export default function FinancialContext({ investorId, investorName, onComplete 
   useEffect(() => {
     if (!investorId) { setLoading(false); return; }
     apiGet(`/api/context/${investorId}`)
-      .then(data => { if (data && typeof data === 'object') setForm(prev => ({ ...prev, ...data })); })
+      .then(data => {
+        const ctx = data?.context || data;
+        if (ctx && typeof ctx === 'object') setForm(prev => ({ ...prev, ...fromApiContext(ctx) }));
+      })
       .catch(() => { /* No existing context — start fresh */ })
       .finally(() => setLoading(false));
   }, [investorId]);
@@ -192,7 +304,7 @@ export default function FinancialContext({ investorId, investorName, onComplete 
     if (!investorId) return;
     setSaving(true);
     try {
-      await apiPost(`/api/context/${investorId}`, form);
+      await apiPost(`/api/context/${investorId}`, toApiPayload(form));
       showToast('Saved');
     } catch (err) {
       showToast(err.message, 'error');
@@ -214,7 +326,7 @@ export default function FinancialContext({ investorId, investorName, onComplete 
     setCompletedSections(prev => new Set([...prev, openSection]));
     saveSection();
     setOpenSection(idx === openSection ? -1 : idx);
-    if (idx === 5 || completedSections.size >= 5) fetchCapacity();
+    if (idx >= 5 || completedSections.size >= 5) fetchCapacity();
   };
 
   const isSectionComplete = (idx) => completedSections.has(idx);
@@ -227,14 +339,14 @@ export default function FinancialContext({ investorId, investorName, onComplete 
 
       {/* Header */}
       <div className="mb-5">
-        <h2 className="text-xl font-semibold text-slate-800">First Conversation — Financial Context</h2>
-        <p className="text-sm text-slate-500 mt-0.5">{investorName || 'Investor'} &middot; Complete all 6 sections to generate a financial capacity score</p>
+        <h2 className="text-xl font-semibold text-slate-800">Investor Profile — Understanding You</h2>
+        <p className="text-sm text-slate-500 mt-0.5">{investorName || 'Investor'} &middot; Complete all 9 sections for a comprehensive financial & emotional profile</p>
       </div>
 
       {/* Progress bar */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 mb-5">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-slate-500">{completedSections.size} of 6 sections completed</span>
+          <span className="text-xs font-semibold text-slate-500">{completedSections.size} of {SECTIONS.length} sections completed</span>
           {saving && <span className="text-[10px] text-teal-600 font-medium animate-pulse">Saving...</span>}
         </div>
         <div className="flex gap-1.5">
@@ -247,10 +359,135 @@ export default function FinancialContext({ investorId, investorName, onComplete 
       {/* Sections */}
       <div className="space-y-2.5">
 
-        {/* Section 1: Income & Stability */}
+        {/* Section 1: Meaning of Money */}
         <div>
           <SectionHeader index={0} title={SECTIONS[0].title} icon={SECTIONS[0].icon} isOpen={openSection === 0} isComplete={isSectionComplete(0)} onClick={() => handleSectionChange(0)} />
           {openSection === 0 && (
+            <Card className="mt-1.5">
+              <div className="p-5 space-y-5">
+                <div>
+                  <p className="text-sm font-semibold text-slate-700 mb-1">What does money mean to you?</p>
+                  <p className="text-xs text-slate-400 mb-3">Choose the one that resonates most deeply — there are no right answers</p>
+                  <div className="grid grid-cols-5 gap-2.5">
+                    <EmotionCard icon="🛡️" label="Security" tag="security" description="Never worrying about emergencies" selected={form.money_meaning === 'security'} onClick={v => set('money_meaning', v)} />
+                    <EmotionCard icon="🌊" label="Freedom" tag="freedom" description="Ability to say no" selected={form.money_meaning === 'freedom'} onClick={v => set('money_meaning', v)} />
+                    <EmotionCard icon="🏔️" label="Legacy" tag="legacy" description="Generational wealth" selected={form.money_meaning === 'legacy'} onClick={v => set('money_meaning', v)} />
+                    <EmotionCard icon="✨" label="Lifestyle" tag="lifestyle" description="Living well" selected={form.money_meaning === 'lifestyle'} onClick={v => set('money_meaning', v)} />
+                    <EmotionCard icon="📈" label="The Game" tag="game" description="Wealth as the score" selected={form.money_meaning === 'game'} onClick={v => set('money_meaning', v)} />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-700 mb-1">When money comes in, what's your first instinct?</p>
+                  <RadioGroup value={form.first_instinct} onChange={v => set('first_instinct', v)}
+                    options={[{ value: 'save', label: 'Save it' }, { value: 'invest', label: 'Invest it' }, { value: 'spend', label: 'Spend / enjoy it' }, { value: 'give', label: 'Share / give it' }]} />
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+
+        {/* Section 2: Fear & Emotional Landscape */}
+        <div>
+          <SectionHeader index={1} title={SECTIONS[1].title} icon={SECTIONS[1].icon} isOpen={openSection === 1} isComplete={isSectionComplete(1)} onClick={() => handleSectionChange(1)} />
+          {openSection === 1 && (
+            <Card className="mt-1.5">
+              <div className="p-5 space-y-5">
+                <div>
+                  <p className="text-sm font-semibold text-slate-700 mb-1">What is your worst financial fear?</p>
+                  <p className="text-xs text-slate-400 mb-3">The scenario that makes your stomach drop</p>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <EmotionCard icon="📉" label="Drawdown Loss" tag="drawdown" description="Portfolio losing 40%" selected={form.worst_fear === 'drawdown'} onClick={v => set('worst_fear', v)} />
+                    <EmotionCard icon="🔐" label="Illiquidity" tag="illiquidity" description="Money locked when needed" selected={form.worst_fear === 'illiquidity'} onClick={v => set('worst_fear', v)} />
+                    <EmotionCard icon="💸" label="Inflation Erosion" tag="inflation" description="Purchasing power eroding" selected={form.worst_fear === 'inflation'} onClick={v => set('worst_fear', v)} />
+                    <EmotionCard icon="😔" label="FOMO" tag="fomo" description="Others building wealth, not me" selected={form.worst_fear === 'fomo'} onClick={v => set('worst_fear', v)} />
+                    <EmotionCard icon="🏦" label="Trust Betrayal" tag="trust" description="Fraud, mismanagement" selected={form.worst_fear === 'trust'} onClick={v => set('worst_fear', v)} />
+                    <EmotionCard icon="⚰️" label="Legacy Failure" tag="legacy" description="Family without resources" selected={form.worst_fear === 'legacy'} onClick={v => set('worst_fear', v)} />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-700 mb-1">If your portfolio dropped 30% tomorrow, how would it affect you?</p>
+                  <RadioGroup value={form.fear_impact} onChange={v => set('fear_impact', v)}
+                    options={[
+                      { value: 'panic', label: "Can't sleep, checking hourly" },
+                      { value: 'anxious', label: 'Very stressed but holding' },
+                      { value: 'steady', label: "Uncomfortable but trusting the process" },
+                      { value: 'detached', label: 'Barely notice, might buy more' },
+                    ]} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-700 mb-1">Which regret hurts more?</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => set('regret_preference', 'loss_regret')} className={`p-4 rounded-xl border-2 text-left transition-all ${form.regret_preference === 'loss_regret' ? 'border-red-400 bg-red-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                      <span className="text-sm font-bold text-red-700">Invested aggressively and lost 40%</span>
+                      <p className="text-xs text-slate-500 mt-1">The pain of actual financial loss</p>
+                    </button>
+                    <button onClick={() => set('regret_preference', 'miss_regret')} className={`p-4 rounded-xl border-2 text-left transition-all ${form.regret_preference === 'miss_regret' ? 'border-amber-400 bg-amber-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                      <span className="text-sm font-bold text-amber-700">Played it safe and missed a 200% rally</span>
+                      <p className="text-xs text-slate-500 mt-1">The frustration of missed opportunity</p>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+
+        {/* Section 3: Knowledge & Experience */}
+        <div>
+          <SectionHeader index={2} title={SECTIONS[2].title} icon={SECTIONS[2].icon} isOpen={openSection === 2} isComplete={isSectionComplete(2)} onClick={() => handleSectionChange(2)} />
+          {openSection === 2 && (
+            <Card className="mt-1.5">
+              <div className="p-5 space-y-5">
+                <Field label="Investment Knowledge Level">
+                  <RadioGroup value={form.knowledge_level} onChange={v => set('knowledge_level', v)}
+                    options={[{ value: 'basic', label: 'Basic' }, { value: 'intermediate', label: 'Intermediate' }, { value: 'advanced', label: 'Advanced' }, { value: 'expert', label: 'Expert' }]} />
+                </Field>
+                <Field label="Investment Experience" helper="Select all asset classes you have invested in">
+                  <CheckboxGroup options={EXPERIENCE_OPTIONS} selected={form.investment_experience} onChange={v => set('investment_experience', v)} />
+                </Field>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Have you invested in equities before?">
+                    <RadioGroup value={form.equity_experience === true ? 'YES' : form.equity_experience === false ? 'NO' : ''} onChange={v => set('equity_experience', v === 'YES')}
+                      options={[{ value: 'YES', label: 'Yes' }, { value: 'NO', label: 'No' }]} />
+                  </Field>
+                  <Field label="What % of your total wealth is this portfolio?" helper="Concentration of wealth in this investment">
+                    <div className="relative">
+                      <NumInput value={form.wealth_concentration} onChange={v => set('wealth_concentration', v)} placeholder="e.g. 40" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-mono">%</span>
+                    </div>
+                  </Field>
+                </div>
+                {form.equity_experience && (
+                  <div className="bg-blue-50 rounded-xl p-4 border border-blue-100 space-y-4">
+                    <Field label="During a market downturn, what did you actually do?">
+                      <RadioGroup value={form.downturn_behavior} onChange={v => set('downturn_behavior', v)}
+                        options={[
+                          { value: 'sold_all', label: 'Sold everything' },
+                          { value: 'sold_some', label: 'Sold some' },
+                          { value: 'held', label: 'Held through' },
+                          { value: 'bought_more', label: 'Bought more' },
+                          { value: 'not_invested', label: "Wasn't invested then" },
+                        ]} />
+                    </Field>
+                    <Field label="After the downturn, what happened?">
+                      <RadioGroup value={form.recovery_behavior} onChange={v => set('recovery_behavior', v)}
+                        options={[
+                          { value: 'full_recovery', label: 'Full recovery — stayed invested' },
+                          { value: 'exited_early', label: 'Exited early — missed recovery' },
+                          { value: 'never_returned', label: 'Never returned to equities' },
+                        ]} />
+                    </Field>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+        </div>
+
+        {/* Section 4: Income & Stability */}
+        <div>
+          <SectionHeader index={3} title={SECTIONS[3].title} icon={SECTIONS[3].icon} isOpen={openSection === 3} isComplete={isSectionComplete(3)} onClick={() => handleSectionChange(3)} />
+          {openSection === 3 && (
             <Card className="mt-1.5">
               <div className="grid grid-cols-2 gap-4 p-5">
                 <Field label="Annual Income (Lakhs)" monetary>
@@ -276,10 +513,10 @@ export default function FinancialContext({ investorId, investorName, onComplete 
           )}
         </div>
 
-        {/* Section 2: Obligations & Liquidity */}
+        {/* Section 5: Obligations & Liquidity */}
         <div>
-          <SectionHeader index={1} title={SECTIONS[1].title} icon={SECTIONS[1].icon} isOpen={openSection === 1} isComplete={isSectionComplete(1)} onClick={() => handleSectionChange(1)} />
-          {openSection === 1 && (
+          <SectionHeader index={4} title={SECTIONS[4].title} icon={SECTIONS[4].icon} isOpen={openSection === 4} isComplete={isSectionComplete(4)} onClick={() => handleSectionChange(4)} />
+          {openSection === 4 && (
             <Card className="mt-1.5">
               <div className="space-y-4 p-5">
                 <div className="grid grid-cols-2 gap-4">
@@ -307,10 +544,10 @@ export default function FinancialContext({ investorId, investorName, onComplete 
           )}
         </div>
 
-        {/* Section 3: Existing Assets */}
+        {/* Section 6: Existing Assets */}
         <div>
-          <SectionHeader index={2} title={SECTIONS[2].title} icon={SECTIONS[2].icon} isOpen={openSection === 2} isComplete={isSectionComplete(2)} onClick={() => handleSectionChange(2)} />
-          {openSection === 2 && (
+          <SectionHeader index={5} title={SECTIONS[5].title} icon={SECTIONS[5].icon} isOpen={openSection === 5} isComplete={isSectionComplete(5)} onClick={() => handleSectionChange(5)} />
+          {openSection === 5 && (
             <Card className="mt-1.5">
               <div className="p-5 space-y-4">
                 <p className="text-xs text-slate-400">Enter all values in Lakhs (₹)</p>
@@ -345,10 +582,10 @@ export default function FinancialContext({ investorId, investorName, onComplete 
           )}
         </div>
 
-        {/* Section 4: Real Loss Experience */}
+        {/* Section 7: Real Loss Experience */}
         <div>
-          <SectionHeader index={3} title={SECTIONS[3].title} icon={SECTIONS[3].icon} isOpen={openSection === 3} isComplete={isSectionComplete(3)} onClick={() => handleSectionChange(3)} />
-          {openSection === 3 && (
+          <SectionHeader index={6} title={SECTIONS[6].title} icon={SECTIONS[6].icon} isOpen={openSection === 6} isComplete={isSectionComplete(6)} onClick={() => handleSectionChange(6)} />
+          {openSection === 6 && (
             <Card className="mt-1.5">
               <div className="p-5 space-y-4">
                 <Field label="Have you experienced a real investment loss?">
@@ -380,10 +617,10 @@ export default function FinancialContext({ investorId, investorName, onComplete 
           )}
         </div>
 
-        {/* Section 5: Return Aspirations */}
+        {/* Section 8: Return Aspirations */}
         <div>
-          <SectionHeader index={4} title={SECTIONS[4].title} icon={SECTIONS[4].icon} isOpen={openSection === 4} isComplete={isSectionComplete(4)} onClick={() => handleSectionChange(4)} />
-          {openSection === 4 && (
+          <SectionHeader index={7} title={SECTIONS[7].title} icon={SECTIONS[7].icon} isOpen={openSection === 7} isComplete={isSectionComplete(7)} onClick={() => handleSectionChange(7)} />
+          {openSection === 7 && (
             <Card className="mt-1.5">
               <div className="p-5 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -405,10 +642,10 @@ export default function FinancialContext({ investorId, investorName, onComplete 
           )}
         </div>
 
-        {/* Section 6: Decision Making */}
+        {/* Section 9: Decision Making */}
         <div>
-          <SectionHeader index={5} title={SECTIONS[5].title} icon={SECTIONS[5].icon} isOpen={openSection === 5} isComplete={isSectionComplete(5)} onClick={() => handleSectionChange(5)} />
-          {openSection === 5 && (
+          <SectionHeader index={8} title={SECTIONS[8].title} icon={SECTIONS[8].icon} isOpen={openSection === 8} isComplete={isSectionComplete(8)} onClick={() => handleSectionChange(8)} />
+          {openSection === 8 && (
             <Card className="mt-1.5">
               <div className="p-5 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -438,11 +675,11 @@ export default function FinancialContext({ investorId, investorName, onComplete 
       </div>
 
       {/* Capacity Score & Summary */}
-      {completedSections.size >= 3 && (
+      {completedSections.size >= 5 && (
         <div className="mt-6 space-y-4">
           <div className="bg-white rounded-xl border border-slate-200 p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <CapacityGauge score={capacity?.score ?? Math.min(Math.round(completedSections.size / 6 * 65), 100)} />
+              <CapacityGauge score={capacity?.financial_capacity_score ?? Math.min(Math.round(completedSections.size / SECTIONS.length * 65), 100)} />
               <div className="flex flex-col justify-center gap-4">
                 <div className="bg-white rounded-xl border border-slate-200 p-4">
                   <p className="text-xs text-slate-400 mb-0.5">Liquidity Runway</p>
@@ -483,10 +720,10 @@ export default function FinancialContext({ investorId, investorName, onComplete 
       )}
 
       {/* Show continue hint if not enough sections completed */}
-      {completedSections.size < 3 && (
+      {completedSections.size < 5 && (
         <div className="mt-6 bg-slate-50 rounded-xl border border-slate-200 p-5 text-center">
-          <p className="text-sm text-slate-500">Complete at least 3 sections to see your Financial Capacity Score</p>
-          <p className="text-xs text-slate-400 mt-1">All 6 sections recommended for accurate scoring</p>
+          <p className="text-sm text-slate-500">Complete at least 5 sections to see your Financial Capacity Score</p>
+          <p className="text-xs text-slate-400 mt-1">All {SECTIONS.length} sections recommended for accurate scoring</p>
         </div>
       )}
     </div>

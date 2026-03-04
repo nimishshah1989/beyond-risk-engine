@@ -97,10 +97,10 @@ def risk_tolerance_score(final_range: List[float]) -> Tuple[float, float]:
     """Convert final multiplier range to 0-100 risk tolerance score.
 
     Lower multiplier needed to gamble = MORE risk tolerant.
-    1.2x → ~95, 2.0x → ~60, 4.0x+ → ~15
+    1.2x → ~95 (risk seeking), 3.6x → ~50 (average), 6.0x → ~5 (risk averse).
     """
     multiplier = (final_range[0] + final_range[1]) / 2
-    score = max(0, min(100, round(110 - 25 * multiplier)))
+    score = max(5, min(95, round(118 - 19 * multiplier)))
     sigma = 12.0
     return float(score), sigma
 
@@ -166,60 +166,126 @@ def loss_aversion_score(final_range: List[float]) -> Tuple[float, float, float]:
     return round(lambda_raw, 3), float(score), sigma
 
 
-# ─── Game 3: Time Preference (Adjusting Delay) ───
+# ─── Game 3: Time Preference (Premium Bisection at 2 Horizons) ───
 
-DELAY_SEQUENCE = [1, 7, 30, 180, 365, 1095, 3650, 9125]
-DELAY_LABELS = ["1 day", "1 week", "1 month", "6 months", "1 year", "3 years", "10 years", "25 years"]
-TIME_TRIALS = 5
+TIME_SHORT_DELAY_YEARS = 1
+TIME_LONG_DELAY_YEARS = 5
+TIME_SHORT_RANGE = [1.05, 3.0]   # premium multiplier for 1yr
+TIME_LONG_RANGE = [1.10, 5.0]    # premium multiplier for 5yr
+TIME_SHORT_TRIALS = 3
+TIME_LONG_TRIALS = 2
+TIME_TRIALS = TIME_SHORT_TRIALS + TIME_LONG_TRIALS  # 5 total
 
 
 def time_preference_first_stimulus(anchor: int) -> dict:
-    """First stimulus: immediate=anchor, delayed=anchor*2, at midpoint delay."""
-    idx = (0 + len(DELAY_SEQUENCE) - 1) // 2
+    """First stimulus: anchor now vs anchor * midpoint_premium in 1 year."""
+    mid = (TIME_SHORT_RANGE[0] + TIME_SHORT_RANGE[1]) / 2
     return {
         "immediate": anchor,
-        "delayed": round_to_clean_amount(anchor * 2),
-        "delay_days": DELAY_SEQUENCE[idx],
-        "delay_label": DELAY_LABELS[idx],
+        "delayed": round_to_clean_amount(anchor * mid),
+        "delay_years": TIME_SHORT_DELAY_YEARS,
+        "delay_label": "1 year",
+        "premium": round(mid, 3),
+        "phase": "short",
         "trial": 1,
     }
 
 
 def time_preference_next(
-    trial_num: int, choice: str, current_range: List[int], anchor: int
-) -> Tuple[Optional[dict], List[int]]:
-    """Bisect the delay index. Accepts both 'now'/'immediate' as impatient."""
-    idx = (current_range[0] + current_range[1]) // 2
-    if choice in ("immediate", "now"):
-        new_range = [current_range[0], idx]  # impatient, try shorter delay
+    trial_num: int, choice: str, state: dict, anchor: int
+) -> Tuple[Optional[dict], dict]:
+    """Bisect premium multiplier. State is a dict with short_range, long_range, phase, counts."""
+    phase = state.get("phase", "short")
+    short_range = list(state.get("short_range", TIME_SHORT_RANGE))
+    long_range = list(state.get("long_range", TIME_LONG_RANGE))
+    short_trials = state.get("short_trials", 0)
+    long_trials = state.get("long_trials", 0)
+
+    # Apply bisection to current phase
+    if phase == "short":
+        mid = (short_range[0] + short_range[1]) / 2
+        if choice in ("now", "immediate"):
+            short_range = [mid, short_range[1]]  # needs more premium
+        else:
+            short_range = [short_range[0], mid]  # accepts less premium
+        short_trials += 1
     else:
-        new_range = [idx, current_range[1]]  # patient, try longer delay
+        mid = (long_range[0] + long_range[1]) / 2
+        if choice in ("now", "immediate"):
+            long_range = [mid, long_range[1]]
+        else:
+            long_range = [long_range[0], mid]
+        long_trials += 1
 
-    if trial_num >= TIME_TRIALS:
-        return None, new_range
+    new_state = {
+        "short_range": short_range, "long_range": long_range,
+        "phase": phase, "short_trials": short_trials, "long_trials": long_trials,
+    }
 
-    new_idx = (new_range[0] + new_range[1]) // 2
-    new_idx = max(0, min(len(DELAY_SEQUENCE) - 1, new_idx))
-    return {
-        "immediate": anchor,
-        "delayed": round_to_clean_amount(anchor * 2),
-        "delay_days": DELAY_SEQUENCE[new_idx],
-        "delay_label": DELAY_LABELS[new_idx],
-        "trial": trial_num + 1,
-    }, new_range
+    # Transition from short to long phase
+    if phase == "short" and short_trials >= TIME_SHORT_TRIALS:
+        new_state["phase"] = "long"
+        if long_trials >= TIME_LONG_TRIALS:
+            return None, new_state
+        new_mid = (long_range[0] + long_range[1]) / 2
+        return {
+            "immediate": anchor,
+            "delayed": round_to_clean_amount(anchor * new_mid),
+            "delay_years": TIME_LONG_DELAY_YEARS,
+            "delay_label": "5 years",
+            "premium": round(new_mid, 3),
+            "phase": "long",
+            "trial": trial_num + 1,
+        }, new_state
+
+    if phase == "long" and long_trials >= TIME_LONG_TRIALS:
+        return None, new_state
+
+    # Next stimulus in same phase
+    if new_state["phase"] == "short":
+        new_mid = (short_range[0] + short_range[1]) / 2
+        return {
+            "immediate": anchor,
+            "delayed": round_to_clean_amount(anchor * new_mid),
+            "delay_years": TIME_SHORT_DELAY_YEARS,
+            "delay_label": "1 year",
+            "premium": round(new_mid, 3),
+            "phase": "short",
+            "trial": trial_num + 1,
+        }, new_state
+    else:
+        new_mid = (long_range[0] + long_range[1]) / 2
+        return {
+            "immediate": anchor,
+            "delayed": round_to_clean_amount(anchor * new_mid),
+            "delay_years": TIME_LONG_DELAY_YEARS,
+            "delay_label": "5 years",
+            "premium": round(new_mid, 3),
+            "phase": "long",
+            "trial": trial_num + 1,
+        }, new_state
 
 
-def time_preference_score(final_range: List[int]) -> Tuple[float, float, float]:
-    """Returns (k_discount, patience_score_0_100, sigma)."""
-    idx = (final_range[0] + final_range[1]) // 2
-    idx = max(0, min(len(DELAY_SEQUENCE) - 1, idx))
-    ed50_days = DELAY_SEQUENCE[idx]
-    k = 1.0 / ed50_days if ed50_days > 0 else 1.0
+def time_preference_score(state: dict) -> Tuple[float, float, float, float]:
+    """Returns (k_short, k_long, patience_score_0_100, sigma).
 
-    # high k = impatient = low patience score
-    patience_score = max(0, min(100, round(90 - math.log10(max(k, 1e-6)) * 20)))
+    k_short = indifference premium at 1yr - 1 (annual discount rate)
+    k_long = indifference premium at 5yr ^ (1/5) - 1 (annualized rate)
+    Present bias flag: k_short >> k_long indicates hyperbolic discounting.
+    """
+    short_range = state.get("short_range", TIME_SHORT_RANGE)
+    long_range = state.get("long_range", TIME_LONG_RANGE)
+
+    short_premium = (short_range[0] + short_range[1]) / 2
+    long_premium = (long_range[0] + long_range[1]) / 2
+
+    k_short = short_premium - 1.0  # annual rate at 1yr
+    k_long = long_premium ** (1.0 / TIME_LONG_DELAY_YEARS) - 1.0  # annualized at 5yr
+
+    geo_mean = math.sqrt(max(k_short, 0.001) * max(k_long, 0.001))
+    patience_score = max(0, min(100, round(100 - geo_mean * 120)))
     sigma = 14.0
-    return round(k, 6), float(patience_score), sigma
+    return round(k_short, 4), round(k_long, 4), float(patience_score), sigma
 
 
 # ─── Game 4: Herding Susceptibility (Knowledge-Aware) ───
@@ -231,6 +297,7 @@ HERDING_SCENARIOS_BASIC = [
         "option_a": {"name": "Fund Alpha", "return_3y": "14.2%", "risk": "Moderate", "expense": "1.8%"},
         "option_b": {"name": "Fund Beta", "return_3y": "11.8%", "risk": "Low-Moderate", "expense": "0.9%"},
         "social_signal": "87% of investors chose Fund Alpha this month",
+        "social_favors": "A",
         "rational_choice": "B",
     },
     {
@@ -239,6 +306,7 @@ HERDING_SCENARIOS_BASIC = [
         "option_a": {"name": "Continue SIPs as planned"},
         "option_b": {"name": "Pause SIPs and wait for stability"},
         "social_signal": "73% of investors have paused their SIPs",
+        "social_favors": "B",
         "rational_choice": "A",
     },
     {
@@ -247,6 +315,7 @@ HERDING_SCENARIOS_BASIC = [
         "option_a": {"name": "New NFO (no track record)", "category": "Thematic - AI & Robotics"},
         "option_b": {"name": "Established fund (8yr track record)", "category": "Flexi Cap"},
         "social_signal": "This NFO collected \u20b95,200 Cr in 3 days",
+        "social_favors": "A",
         "rational_choice": "B",
     },
 ]
@@ -258,6 +327,7 @@ HERDING_SCENARIOS_ADVANCED = [
         "option_a": {"name": "Momentum Alpha PMS", "return_3y": "22.4%", "drawdown": "-18%", "fee": "2.5% + 20% profit share"},
         "option_b": {"name": "Smart Beta PMS", "return_3y": "16.8%", "drawdown": "-11%", "fee": "1.5% flat"},
         "social_signal": "Momentum Alpha PMS topped the PMS rankings for 3 consecutive quarters",
+        "social_favors": "A",
         "rational_choice": "B",
     },
     {
@@ -266,6 +336,7 @@ HERDING_SCENARIOS_ADVANCED = [
         "option_a": {"name": "Emerging Markets Fund", "exposure": "China, Vietnam, Indonesia", "volatility": "High"},
         "option_b": {"name": "Domestic Large Cap Index", "exposure": "NIFTY 50 top weights", "volatility": "Moderate"},
         "social_signal": "FIIs have increased EM allocation by 40% this quarter",
+        "social_favors": "A",
         "rational_choice": "B",
     },
     {
@@ -274,6 +345,7 @@ HERDING_SCENARIOS_ADVANCED = [
         "option_a": {"name": "Category II AIF", "lock_in": "3 years", "min_ticket": "\u20b91 Cr", "target_return": "18-22%"},
         "option_b": {"name": "REIT (Embassy/Brookfield)", "lock_in": "None", "min_ticket": "\u20b915,000", "target_return": "8-12% + capital appreciation"},
         "social_signal": "AIF inflows crossed \u20b92.5 lakh Cr this year, up 65% YoY",
+        "social_favors": "A",
         "rational_choice": "B",
     },
 ]
@@ -334,8 +406,9 @@ def herding_score(
     for i in range(len(scenarios)):
         if i < len(phase1_choices) and i < len(phase2_choices):
             if phase1_choices[i] != phase2_choices[i]:
-                # Social signal always favors option A in our design
-                if phase2_choices[i] == "A":
+                # Check if the shift is toward the socially-favored option
+                social_favors = scenarios[i].get("social_favors", "A")
+                if phase2_choices[i] == social_favors:
                     shifts_toward_social += 1
 
     herding_index = shifts_toward_social / len(scenarios)
@@ -382,7 +455,7 @@ def compute_session_quality(response_times: List[int]) -> Tuple[float, int]:
 def compute_game_session_scores(
     risk_range: List[float],
     loss_range: List[float],
-    time_range: List[int],
+    time_state: dict,
     herding_p1: List[str],
     herding_p2: List[str],
     response_times: List[int],
@@ -391,7 +464,7 @@ def compute_game_session_scores(
     """Compute all scores for a completed game session."""
     rt_score, rt_sigma = risk_tolerance_score(risk_range)
     la_lambda, la_score, la_sigma = loss_aversion_score(loss_range)
-    tp_k, tp_score, tp_sigma = time_preference_score(time_range)
+    tp_k_short, tp_k_long, tp_score, tp_sigma = time_preference_score(time_state)
     h_index, h_score, h_sigma = herding_score(herding_p1, herding_p2, knowledge_level)
     quality, median_rt = compute_session_quality(response_times)
 
@@ -408,7 +481,9 @@ def compute_game_session_scores(
         "loss_aversion_lambda": la_lambda,
         "loss_aversion_score": la_score,
         "loss_aversion_sigma": round(la_sigma, 2),
-        "time_preference_k": tp_k,
+        "time_preference_k": round(math.sqrt(max(tp_k_short, 0.001) * max(tp_k_long, 0.001)), 6),
+        "time_preference_k_short": tp_k_short,
+        "time_preference_k_long": tp_k_long,
         "time_preference_score": tp_score,
         "time_preference_sigma": round(tp_sigma, 2),
         "herding_index": h_index,

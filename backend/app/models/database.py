@@ -168,7 +168,9 @@ class GameSession(Base):
     risk_tolerance_sigma = Column(Float)
     loss_aversion_lambda = Column(Float)  # raw lambda (typically 1.0-4.0)
     loss_aversion_sigma = Column(Float)
-    time_preference_k = Column(Float)  # discount rate k
+    time_preference_k = Column(Float)  # discount rate k (geometric mean)
+    time_preference_k_short = Column(Float)  # annual discount rate at 1yr horizon
+    time_preference_k_long = Column(Float)  # annualized discount rate at 5yr horizon
     time_preference_sigma = Column(Float)
     herding_index = Column(Float)  # 0-1 shift magnitude
     herding_sigma = Column(Float)
