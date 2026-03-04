@@ -82,7 +82,7 @@ export function RiskToleranceGame({ stimulus, onRespond, disabled }) {
       <div className="flex gap-4">
         <ChoiceButton label="Option A - Safe" title={fmtINR(guaranteed)}
           description="Guaranteed amount, zero risk" color="teal"
-          onClick={() => onRespond({ choice: 'safe' })} disabled={disabled} />
+          onClick={() => onRespond({ choice: 'guaranteed' })} disabled={disabled} />
         <ChoiceButton label="Option B - Gamble" title={fmtINR(gambleWin)}
           description={`${probability}% chance of winning, ${100 - probability}% chance of nothing`}
           color="blue" onClick={() => onRespond({ choice: 'gamble' })} disabled={disabled} />
@@ -154,15 +154,50 @@ export function TimePreferenceGame({ stimulus, onRespond, disabled }) {
   );
 }
 
+/* ── OptionDetail (renders key-value pairs from option object) ──── */
+const DETAIL_LABELS = {
+  return_3y: '3Y Return', risk: 'Risk', expense: 'Expense Ratio', category: 'Category',
+  drawdown: 'Max Drawdown', fee: 'Fee Structure', exposure: 'Exposure', volatility: 'Volatility',
+  lock_in: 'Lock-in', min_ticket: 'Min Investment', target_return: 'Target Return',
+};
+
+function OptionDetailCard({ option, label, color, onClick, disabled }) {
+  const isObj = option && typeof option === 'object';
+  const name = isObj ? option.name : (option || 'Option');
+  const details = isObj ? Object.entries(option).filter(([k]) => k !== 'name' && DETAIL_LABELS[k]) : [];
+  const borderCls = color === 'teal'
+    ? 'border-teal-200 hover:border-teal-500 hover:bg-teal-50 active:bg-teal-100'
+    : 'border-blue-200 hover:border-blue-500 hover:bg-blue-50 active:bg-blue-100';
+  const badgeCls = color === 'teal' ? 'bg-teal-600 text-white' : 'bg-blue-600 text-white';
+
+  return (
+    <button onClick={onClick} disabled={disabled}
+      className={`flex-1 p-5 rounded-xl border-2 transition-all duration-150 text-left ${borderCls} ${
+        disabled ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
+      <span className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${badgeCls} mb-2`}>
+        {label}
+      </span>
+      <p className="text-base font-bold text-slate-800 leading-snug mb-2">{name}</p>
+      {details.length > 0 && (
+        <div className="space-y-1.5 mt-2 border-t border-slate-100 pt-2">
+          {details.map(([k, v]) => (
+            <div key={k} className="flex items-center justify-between gap-2">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider">{DETAIL_LABELS[k]}</span>
+              <span className="text-xs font-semibold font-mono text-slate-700">{v}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </button>
+  );
+}
+
 /* ── HerdingGame ──────────────────────────────────────────────────── */
 export function HerdingGame({ stimulus, onRespond, disabled }) {
-  // stimulus can be a single scenario or contain a scenarios array
   const s = stimulus || {};
-
-  // Extract the current scenario to display
   let scenario = '';
-  let optionA = 'Fund A';
-  let optionB = 'Fund B';
+  let optionAData = 'Fund A';
+  let optionBData = 'Fund B';
   let socialSignal = null;
   let scenarioIndex = s.scenario_index ?? 0;
   let phase = s.phase || 'without_signal';
@@ -170,13 +205,13 @@ export function HerdingGame({ stimulus, onRespond, disabled }) {
   if (s.scenarios && Array.isArray(s.scenarios) && s.scenarios.length > 0) {
     const current = s.scenarios[scenarioIndex] || s.scenarios[0];
     scenario = current.description || '';
-    optionA = typeof current.option_a === 'object' ? current.option_a.name : (current.option_a || 'Fund A');
-    optionB = typeof current.option_b === 'object' ? current.option_b.name : (current.option_b || 'Fund B');
+    optionAData = current.option_a || 'Fund A';
+    optionBData = current.option_b || 'Fund B';
     socialSignal = current.social_signal || null;
   } else {
     scenario = s.scenario || s.description || '';
-    optionA = typeof s.option_a === 'object' ? s.option_a.name : (s.option_a || 'Fund A');
-    optionB = typeof s.option_b === 'object' ? s.option_b.name : (s.option_b || 'Fund B');
+    optionAData = s.option_a || 'Fund A';
+    optionBData = s.option_b || 'Fund B';
     socialSignal = s.social_signal || null;
   }
 
@@ -198,9 +233,9 @@ export function HerdingGame({ stimulus, onRespond, disabled }) {
         )}
       </div>
       <div className="flex gap-4">
-        <ChoiceButton label="Option A" title={optionA} color="teal"
+        <OptionDetailCard option={optionAData} label="Option A" color="teal"
           onClick={() => onRespond({ choice: 'A', phase, scenario_index: scenarioIndex })} disabled={disabled} />
-        <ChoiceButton label="Option B" title={optionB} color="blue"
+        <OptionDetailCard option={optionBData} label="Option B" color="blue"
           onClick={() => onRespond({ choice: 'B', phase, scenario_index: scenarioIndex })} disabled={disabled} />
       </div>
     </GameCard>

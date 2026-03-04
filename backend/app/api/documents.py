@@ -119,6 +119,15 @@ def get_investor_uploads(investor_id: int, db: Session = Depends(get_db)):
         .all()
     )
 
+    # Auto-fail stale uploads (same logic as status endpoint)
+    for u in uploads:
+        if u.status in ("parsing", "scoring") and u.uploaded_at:
+            age = datetime.utcnow() - u.uploaded_at
+            if age > timedelta(minutes=3):
+                u.status = "failed"
+                u.error_message = "Processing timed out. The server may have restarted. Please re-upload."
+    db.commit()
+
     return [
         {
             "upload_id": u.id,
