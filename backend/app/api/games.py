@@ -70,9 +70,9 @@ def _get_game_state(session_id: int, game_type: str, db: Session) -> tuple:
             choice = t.response.get("choice", "")
             mid = (current_range[0] + current_range[1]) / 2
             if choice == "gamble":
-                current_range = [mid, current_range[1]]
+                current_range = [current_range[0], mid]  # reduce to find inflection
             else:
-                current_range = [current_range[0], mid]
+                current_range = [mid, current_range[1]]  # increase to tempt
         return current_range, len(trials)
 
     elif game_type == "loss_aversion":

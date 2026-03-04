@@ -76,9 +76,9 @@ def risk_tolerance_next(
     """Bisect the multiplier range based on choice."""
     mid = (current_range[0] + current_range[1]) / 2
     if choice == "gamble":
-        new_range = [mid, current_range[1]]  # risk tolerant — needs less premium
+        new_range = [current_range[0], mid]  # risk tolerant — reduce gamble to find inflection
     else:
-        new_range = [current_range[0], mid]  # risk averse — reduce gamble
+        new_range = [mid, current_range[1]]  # risk averse — increase gamble to tempt them
 
     if trial_num >= RISK_TRIALS:
         return None, new_range
